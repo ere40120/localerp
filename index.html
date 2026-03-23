@@ -211,7 +211,7 @@ function usePersist(key, init) {
 }
 
 // 로그인 화면 컴포넌트
-function LoginScreen({onLogin}) {
+function LoginScreen({onLogin, onLocalMode}) {
   const [mode, setMode] = useState('login'); // 'login' | 'signup'
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
@@ -315,6 +315,14 @@ function LoginScreen({onLogin}) {
         <div style={S.toggle}>
           {mode === 'login' ? <>계정이 없으신가요?<span style={S.link} onClick={()=>{setMode('signup');setErr('');}}>회원가입</span></> : <>이미 계정이 있으신가요?<span style={S.link} onClick={()=>{setMode('login');setErr('');}}>로그인</span></>}
         </div>
+        {onLocalMode && (
+          <div style={{marginTop:18,paddingTop:18,borderTop:'1px solid #eee',textAlign:'center'}}>
+            <div style={{fontSize:12,color:'#999',marginBottom:10}}>로그인 없이 사용하기</div>
+            <button onClick={onLocalMode} style={{width:'100%',padding:'12px',borderRadius:8,background:'#f5f5f5',color:'#555',border:'1.5px solid #ddd',fontSize:14,fontWeight:600,cursor:'pointer'}}>
+              로컬 모드로 시작 (데이터는 브라우저에 저장)
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -323,15 +331,27 @@ function LoginScreen({onLogin}) {
 // 인증 상태 관리 루트 컴포넌트
 function AuthRoot() {
   const [user, setUser] = useState(undefined); // undefined=로딩중, null=비로그인
+  const [localMode, setLocalMode] = useState(false);
 
   useEffect(() => {
-    if (!_useFirebase) { setUser(null); return; }
+    if (!_useFirebase) { setLocalMode(true); setUser({email:'로컬 사용자',uid:'local'}); return; }
+    let resolved = false;
+    const timeout = setTimeout(() => {
+      if (!resolved) { setLocalMode(true); setUser({email:'로컬 사용자',uid:'local'}); }
+    }, 4000);
     const unsub = __auth.onAuthStateChanged(u => {
-      __uid = u ? u.uid : null;
-      setUser(u);
+      resolved = true; clearTimeout(timeout);
+      if (u) { __uid = u.uid; setUser(u); }
+      else { setUser(null); }
     });
-    return () => unsub();
+    return () => { unsub(); clearTimeout(timeout); };
   }, []);
+
+  const enterLocalMode = () => {
+    __uid = null;
+    setLocalMode(true);
+    setUser({email:'로컬 사용자',uid:'local'});
+  };
 
   if (user === undefined) {
     return (
@@ -340,7 +360,7 @@ function AuthRoot() {
       </div>
     );
   }
-  if (!user) return <LoginScreen/>;
+  if (!user && !localMode) return <LoginScreen onLocalMode={enterLocalMode}/>;
   return <App user={user}/>;
 }
 
@@ -518,9 +538,12 @@ const Sidebar = ({activeMenu,setActiveMenu,menuOrder,setMenuOrder,hiddenMenus,se
           );
         })}
       </div>
-      <div style={{padding:"8px 12px",borderTop:"1px solid rgba(255,255,255,0.1)"}}>
+      <div style={{padding:"8px 12px",borderTop:"1px solid rgba(255,255,255,0.1)",display:"flex",flexDirection:"column",gap:6}}>
         <button onClick={()=>setEditMode(!editMode)} style={{background:editMode?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.08)",border:"none",color:"#fff",padding:"6px 12px",borderRadius:5,fontSize:11,cursor:"pointer",width:"100%",opacity:0.8,display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
           {editMode?<><Check size={11}/> 편집 완료</>:<><Settings size={11}/> 메뉴 편집{hiddenCount>0?` (${hiddenCount}개 숨김)`:""}</>}
+        </button>
+        <button onClick={()=>{if(typeof __auth!=='undefined'&&__auth&&__auth.currentUser)__auth.signOut();else location.reload();}} style={{background:"rgba(255,255,255,0.06)",border:"none",color:"#fff",padding:"6px 12px",borderRadius:5,fontSize:11,cursor:"pointer",width:"100%",opacity:0.6,display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
+          로그아웃
         </button>
       </div>
     </div>
@@ -1547,7 +1570,7 @@ function App({user}) {
           <button className="hamburger" onClick={()=>setSidebarOpen(true)}><Menu size={22}/></button>
           <span style={{fontSize:16,fontWeight:700,flex:1}}>LocalERP</span>
           <span style={{fontSize:11,opacity:0.7,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user&&user.email}</span>
-          <button onClick={()=>__auth.signOut()} style={{background:'rgba(255,255,255,0.15)',border:'none',color:'#fff',borderRadius:6,padding:'4px 10px',fontSize:12,cursor:'pointer',marginLeft:6}}>로그아웃</button>
+          <button onClick={()=>{if(typeof __auth!=='undefined'&&__auth)__auth.signOut();else location.reload();}} style={{background:'rgba(255,255,255,0.15)',border:'none',color:'#fff',borderRadius:6,padding:'4px 10px',fontSize:12,cursor:'pointer',marginLeft:6}}>로그아웃</button>
         </div>
         <div className="main-content" style={{flex:1,padding:"22px 26px",overflowX:"auto"}}>{page()}</div>
       </div>
