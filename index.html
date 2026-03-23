@@ -443,7 +443,7 @@ const toHanja = n => {
   while(num>0){let ch=num%10000,cs="";for(let i=0;ch>0;i++){let dd=ch%10;if(dd>0)cs=(dd===1&&i>0?"":d[dd])+u[i]+cs;ch=Math.floor(ch/10);}if(cs)s=cs+bg[bi]+s;num=Math.floor(num/10000);bi++;}
   return s+"원정(\\"+fmt(Math.abs(n))+")";
 };
-const printCSS=`@media print{body *{visibility:hidden!important}#print-area,#print-area *{visibility:visible!important}#print-area{position:fixed;top:0;left:0;width:100%;z-index:99999}}`;
+const printCSS=`@media print{@page{margin:8mm 10mm}body *{visibility:hidden!important}#print-area,#print-area *{visibility:visible!important}#print-area{position:fixed;top:0;left:0;width:100%;padding:0!important;z-index:99999}.print-duplex-wrap{height:100vh!important;display:flex!important;flex-direction:column!important}.print-duplex-half{flex:1!important;overflow:hidden!important;display:flex!important;align-items:center!important}}`;
 const S={
   input:{padding:"7px 10px",border:"1px solid #d0d5dd",borderRadius:6,fontSize:13,outline:"none",width:"100%"},
   select:{padding:"7px 10px",border:"1px solid #d0d5dd",borderRadius:6,fontSize:13,outline:"none",width:"100%",background:"#fff"},
@@ -550,57 +550,71 @@ const Sidebar = ({activeMenu,setActiveMenu,menuOrder,setMenuOrder,hiddenMenus,se
   );
 };
 
-const PrintModal = ({children,onClose,title}) => (
+const PrintModal = ({children,onClose,title,allowDuplex,renderHalf}) => {
+  const [duplex,setDuplex]=useState(false);
+  return (
   <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-    <style>{printCSS}</style>
+    <style>{printCSS}{duplex?`@media print{@page{margin:5mm 8mm}}`:""}</style>
     <div style={{background:"#fff",borderRadius:12,width:"95vw",maxWidth:900,maxHeight:"92vh",display:"flex",flexDirection:"column"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 20px",borderBottom:"1px solid #eee"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 20px",borderBottom:"1px solid #eee",flexWrap:"wrap",gap:8}}>
         <span style={{fontWeight:700,fontSize:15}}>{title} 미리보기</span>
-        <div style={{display:"flex",gap:8}}>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {allowDuplex&&<label style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"#555",cursor:"pointer",padding:"6px 10px",background:duplex?"#e3f2fd":"#f5f5f5",border:duplex?"1px solid #90caf9":"1px solid #ddd",borderRadius:6}}><input type="checkbox" checked={duplex} onChange={e=>setDuplex(e.target.checked)} style={{width:14,height:14,cursor:"pointer"}}/>A4 2장 인쇄</label>}
           <button onClick={()=>window.print()} style={{...S.btn,background:"#2e7d32"}}><Printer size={14}/> 인쇄</button>
           <button onClick={onClose} style={S.btnSec}><X size={14}/> 닫기</button>
         </div>
       </div>
-      <div id="print-area" style={{flex:1,overflow:"auto",padding:20}}>{children}</div>
+      <div id="print-area" style={{flex:1,overflow:"auto",padding:20}}>
+        {duplex&&renderHalf?(
+          <div className="print-duplex-wrap" style={{width:"100%",display:"flex",flexDirection:"column"}}>
+            <div className="print-duplex-half" style={{flex:1,paddingBottom:6,borderBottom:"1px dashed #aaa",marginBottom:6}}>{renderHalf()}</div>
+            <div className="print-duplex-half" style={{flex:1,paddingTop:2}}>{renderHalf()}</div>
+          </div>
+        ):children}
+      </div>
     </div>
   </div>
-);
+  );
+};
 
-const StatementPreview = ({stmt,partner,myBiz}) => {
-  const b={border:"1px solid #333",padding:"4px 6px",fontSize:11,lineHeight:1.4};
+const StatementPreview = ({stmt,partner,myBiz,half}) => {
+  const sc=half?0.72:1;
+  const fs=n=>n*sc;
+  const b={border:"1px solid #333",padding:`${fs(3)}px ${fs(5)}px`,fontSize:fs(11),lineHeight:1.3};
   const h={...b,background:"#e8eaf6",fontWeight:700,textAlign:"center"};
+  const emptyRows=half?Math.max(0,4-stmt.items.length):Math.max(0,8-stmt.items.length);
   return (
-    <div style={{width:780,margin:"0 auto",fontFamily:"'Malgun Gothic',sans-serif",color:"#000"}}>
-      <div style={{textAlign:"center",fontSize:20,fontWeight:800,borderBottom:"3px double #333",paddingBottom:8,marginBottom:12}}>거 래 명 세 서</div>
-      <div style={{display:"flex",gap:16,marginBottom:10}}>
+    <div style={{width:"100%",maxWidth:half?undefined:780,margin:"0 auto",fontFamily:"'Malgun Gothic',sans-serif",color:"#000",boxSizing:"border-box"}}>
+      <div style={{textAlign:"center",fontSize:fs(20),fontWeight:800,borderBottom:`${half?2:3}px double #333`,paddingBottom:fs(6),marginBottom:fs(8)}}>거 래 명 세 서</div>
+      <div style={{display:"flex",gap:fs(10),marginBottom:fs(8)}}>
         <div style={{flex:1}}><table style={{width:"100%",borderCollapse:"collapse"}}><tbody>
-          <tr><td style={{...h,width:60}}>공급자</td><td colSpan={3} style={{...b,fontWeight:700,textAlign:"center"}}>{myBiz.name}</td></tr>
-          <tr><td style={h}>사업자번호</td><td style={b}>{myBiz.bizNo}</td><td style={{...h,width:50}}>대표자</td><td style={b}>{myBiz.ceo}</td></tr>
+          <tr><td style={{...h,width:fs(55)}}>공급자</td><td colSpan={3} style={{...b,fontWeight:700,textAlign:"center"}}>{myBiz.name}</td></tr>
+          <tr><td style={h}>사업자번호</td><td style={b}>{myBiz.bizNo}</td><td style={{...h,width:fs(45)}}>대표자</td><td style={b}>{myBiz.ceo}</td></tr>
           <tr><td style={h}>주소</td><td colSpan={3} style={b}>{myBiz.addr}</td></tr>
           <tr><td style={h}>업태</td><td style={b}>{myBiz.업태}</td><td style={h}>종목</td><td style={b}>{myBiz.종목}</td></tr>
           <tr><td style={h}>TEL</td><td style={b}>{myBiz.tel}</td><td style={h}>FAX</td><td style={b}>{myBiz.fax}</td></tr>
         </tbody></table></div>
         <div style={{flex:1}}><table style={{width:"100%",borderCollapse:"collapse"}}><tbody>
-          <tr><td style={{...h,width:60}}>수 신</td><td colSpan={3} style={{...b,fontWeight:700,textAlign:"center"}}>{partner?.name||""}</td></tr>
-          <tr><td style={h}>사업자번호</td><td style={b}>{partner?.bizNo||""}</td><td style={{...h,width:50}}>대표자</td><td style={b}>{partner?.ceo||""}</td></tr>
+          <tr><td style={{...h,width:fs(55)}}>수 신</td><td colSpan={3} style={{...b,fontWeight:700,textAlign:"center"}}>{partner?.name||""}</td></tr>
+          <tr><td style={h}>사업자번호</td><td style={b}>{partner?.bizNo||""}</td><td style={{...h,width:fs(45)}}>대표자</td><td style={b}>{partner?.ceo||""}</td></tr>
           <tr><td style={h}>주소</td><td colSpan={3} style={b}>{partner?.addr||""}</td></tr>
           <tr><td style={h}>업태</td><td style={b}>{partner?.업태||""}</td><td style={h}>종목</td><td style={b}>{partner?.종목||""}</td></tr>
-          <tr><td style={h}>TEL</td><td style={b}>{partner?.tel||""}</td><td style={h}>E-mail</td><td style={b}>{partner?.email||""}</td></tr>
+          <tr><td style={h}>TEL</td><td style={b}>{partner?.tel||""}</td><td style={h}>E-mail</td><td style={{...b,wordBreak:"break-all"}}>{partner?.email||""}</td></tr>
         </tbody></table></div>
       </div>
-      <table style={{width:"100%",borderCollapse:"collapse",marginBottom:8}}>
+      <table style={{width:"100%",borderCollapse:"collapse",marginBottom:fs(6)}}>
         <thead><tr>{["No","품목명","규격","수량","단위","단가","공급가액","비고"].map((t,i)=><th key={i} style={{...h}}>{t}</th>)}</tr></thead>
         <tbody>
           {stmt.items.map((it,i)=><tr key={i}><td style={{...b,textAlign:"center"}}>{i+1}</td><td style={b}>{it.name}</td><td style={{...b,textAlign:"center"}}>{it.spec}</td><td style={{...b,textAlign:"right"}}>{fmt(it.qty)}</td><td style={{...b,textAlign:"center"}}>{it.unit}</td><td style={{...b,textAlign:"right"}}>{fmt(it.unitPrice)}</td><td style={{...b,textAlign:"right"}}>{fmt(it.qty*it.unitPrice)}</td><td style={b}>{it.note}</td></tr>)}
-          {Array.from({length:Math.max(0,8-stmt.items.length)}).map((_,i)=><tr key={"e"+i}>{Array(8).fill(0).map((_,j)=><td key={j} style={{...b,height:22}}>&nbsp;</td>)}</tr>)}
+          {Array.from({length:emptyRows}).map((_,i)=><tr key={"e"+i}>{Array(8).fill(0).map((_,j)=><td key={j} style={{...b,height:fs(20)}}>&nbsp;</td>)}</tr>)}
         </tbody>
       </table>
-      <table style={{width:"100%",borderCollapse:"collapse",marginBottom:8}}><tbody><tr>
-        <td style={{...h,width:100}}>공급가액</td><td style={{...b,textAlign:"right",fontWeight:700}}>{fmt(stmt.supplyTotal)}</td>
-        {stmt.includeVat!==false&&<><td style={{...h,width:80}}>부가세</td><td style={{...b,textAlign:"right",fontWeight:700}}>{fmt(stmt.vatTotal)}</td></>}
-        <td style={{...h,width:80}}>총 합계</td><td style={{...b,textAlign:"right",fontWeight:800,fontSize:13}}>{fmt(stmt.grandTotal)}</td>
+      <table style={{width:"100%",borderCollapse:"collapse",marginBottom:fs(6)}}><tbody><tr>
+        <td style={{...h,width:fs(90)}}>공급가액</td><td style={{...b,textAlign:"right",fontWeight:700}}>{fmt(stmt.supplyTotal)}</td>
+        {stmt.includeVat!==false&&<><td style={{...h,width:fs(70)}}>부가세</td><td style={{...b,textAlign:"right",fontWeight:700}}>{fmt(stmt.vatTotal)}</td></>}
+        <td style={{...h,width:fs(70)}}>총 합계</td><td style={{...b,textAlign:"right",fontWeight:800,fontSize:fs(13)}}>{fmt(stmt.grandTotal)}</td>
       </tr></tbody></table>
-      <div style={{textAlign:"center",fontSize:12,fontWeight:700,padding:8,borderTop:"2px solid #333"}}>합계금액: {toHanja(stmt.grandTotal)}</div>
+      <div style={{textAlign:"center",fontSize:fs(11),fontWeight:700,padding:fs(6),borderTop:"2px solid #333"}}>합계금액: {toHanja(stmt.grandTotal)}</div>
     </div>
   );
 };
@@ -799,7 +813,7 @@ const StatementPage = ({statements,setStatements,partners,myBiz,products,partner
           <button onClick={handleSubmit} style={S.btn}><Check size={14}/> {editId?"수정":"발행"}</button>
         </div>
       </div>
-      {preview&&<PrintModal title="거래명세서" onClose={()=>setPreview(null)}><StatementPreview stmt={preview.data} partner={preview.partner} myBiz={myBiz}/></PrintModal>}
+      {preview&&<PrintModal title="거래명세서" onClose={()=>setPreview(null)} allowDuplex renderHalf={()=><StatementPreview stmt={preview.data} partner={preview.partner} myBiz={myBiz} half/>}><StatementPreview stmt={preview.data} partner={preview.partner} myBiz={myBiz}/></PrintModal>}
     </div>
   );
   return (
@@ -833,7 +847,7 @@ const StatementPage = ({statements,setStatements,partners,myBiz,products,partner
         </table>
         {!filteredStatements.length&&<div style={{padding:40,textAlign:"center",color:"#999"}}>거래명세서가 없습니다.</div>}
       </div>
-      {preview&&<PrintModal title="거래명세서" onClose={()=>setPreview(null)}><StatementPreview stmt={preview.data} partner={preview.partner} myBiz={myBiz}/></PrintModal>}
+      {preview&&<PrintModal title="거래명세서" onClose={()=>setPreview(null)} allowDuplex renderHalf={()=><StatementPreview stmt={preview.data} partner={preview.partner} myBiz={myBiz} half/>}><StatementPreview stmt={preview.data} partner={preview.partner} myBiz={myBiz}/></PrintModal>}
     </div>
   );
 };
