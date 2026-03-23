@@ -443,7 +443,7 @@ const toHanja = n => {
   while(num>0){let ch=num%10000,cs="";for(let i=0;ch>0;i++){let dd=ch%10;if(dd>0)cs=(dd===1&&i>0?"":d[dd])+u[i]+cs;ch=Math.floor(ch/10);}if(cs)s=cs+bg[bi]+s;num=Math.floor(num/10000);bi++;}
   return s+"원정(\\"+fmt(Math.abs(n))+")";
 };
-const printCSS=`@media print{body>div{display:none!important}#print-area{display:block!important;position:fixed;top:0;left:0;width:100%}}`;
+const printCSS=`@media print{body *{visibility:hidden!important}#print-area,#print-area *{visibility:visible!important}#print-area{position:fixed;top:0;left:0;width:100%;z-index:99999}}`;
 const S={
   input:{padding:"7px 10px",border:"1px solid #d0d5dd",borderRadius:6,fontSize:13,outline:"none",width:"100%"},
   select:{padding:"7px 10px",border:"1px solid #d0d5dd",borderRadius:6,fontSize:13,outline:"none",width:"100%",background:"#fff"},
@@ -597,7 +597,7 @@ const StatementPreview = ({stmt,partner,myBiz}) => {
       </table>
       <table style={{width:"100%",borderCollapse:"collapse",marginBottom:8}}><tbody><tr>
         <td style={{...h,width:100}}>공급가액</td><td style={{...b,textAlign:"right",fontWeight:700}}>{fmt(stmt.supplyTotal)}</td>
-        <td style={{...h,width:80}}>부가세</td><td style={{...b,textAlign:"right",fontWeight:700}}>{fmt(stmt.vatTotal)}</td>
+        {stmt.includeVat!==false&&<><td style={{...h,width:80}}>부가세</td><td style={{...b,textAlign:"right",fontWeight:700}}>{fmt(stmt.vatTotal)}</td></>}
         <td style={{...h,width:80}}>총 합계</td><td style={{...b,textAlign:"right",fontWeight:800,fontSize:13}}>{fmt(stmt.grandTotal)}</td>
       </tr></tbody></table>
       <div style={{textAlign:"center",fontSize:12,fontWeight:700,padding:8,borderTop:"2px solid #333"}}>합계금액: {toHanja(stmt.grandTotal)}</div>
@@ -746,18 +746,18 @@ const PartnerPricePage = ({partners,products,partnerPrices,setPartnerPrices}) =>
 const StatementPage = ({statements,setStatements,partners,myBiz,products,partnerPrices}) => {
   const today=new Date().toISOString().slice(0,10);
   const emptyItem={productId:"",name:"",spec:"",qty:1,unit:"개",unitPrice:0,note:""};
-  const emptyForm={date:today,partnerId:"",items:[{...emptyItem}],dueDate:"",payTerms:"월말 결제",memo:""};
+  const emptyForm={date:today,partnerId:"",items:[{...emptyItem}],dueDate:"",payTerms:"월말 결제",memo:"",includeVat:true};
   const [form,setForm]=useState(emptyForm);const [editId,setEditId]=useState(null);const [preview,setPreview]=useState(null);const [mode,setMode]=useState("list");
   const [viewMode,setViewMode]=useState("all");const [filterPartner,setFilterPartner]=useState("");const [filterDateFrom,setFilterDateFrom]=useState("");const [filterDateTo,setFilterDateTo]=useState("");
   const getPrice=(prodId,partnerId)=>{if(partnerId&&partnerPrices[partnerId]&&partnerPrices[partnerId][prodId]!=null)return partnerPrices[partnerId][prodId];const prod=products.find(p=>p.id===prodId);return prod?prod.basePrice:0;};
-  const calcTotals=items=>{const sup=items.reduce((s,it)=>s+(it.qty*it.unitPrice),0);return{supplyTotal:sup,vatTotal:Math.round(sup*0.1),grandTotal:sup+Math.round(sup*0.1)};};
+  const calcTotals=(items,includeVat=true)=>{const sup=items.reduce((s,it)=>s+(it.qty*it.unitPrice),0);const vat=includeVat?Math.round(sup*0.1):0;return{supplyTotal:sup,vatTotal:vat,grandTotal:sup+vat};};
   const selectProduct=(idx,prodId)=>{const prod=products.find(p=>p.id===prodId);if(!prod)return;const price=getPrice(prodId,form.partnerId);const items=[...form.items];items[idx]={...items[idx],productId:prodId,name:prod.name,spec:prod.spec,unit:prod.unit,unitPrice:price};setForm({...form,items});};
   const onPartnerChange=(pid)=>{const items=form.items.map(it=>{if(it.productId){const price=getPrice(it.productId,pid);return{...it,unitPrice:price};}return it;});setForm({...form,partnerId:pid,items});};
   const updateItem=(idx,field,val)=>{const items=[...form.items];items[idx]={...items[idx],[field]:field==="qty"||field==="unitPrice"?Number(val)||0:val};setForm({...form,items});};
   const addItem=()=>setForm({...form,items:[...form.items,{...emptyItem}]});
   const removeItem=idx=>{if(form.items.length>1)setForm({...form,items:form.items.filter((_,i)=>i!==idx)});};
-  const handleSubmit=()=>{if(!form.partnerId){alert("거래처를 선택하세요.");return;}const totals=calcTotals(form.items);if(editId){setStatements(p=>p.map(s=>s.id===editId?{...s,...form,...totals,status:"발행완료"}:s));setEditId(null);}else{const nid="S"+String(Math.max(0,...statements.map(s=>parseInt(s.id.replace("S",""))||0))+1).padStart(3,"0");setStatements(p=>[...p,{id:nid,...form,...totals,status:"발행완료"}]);}setForm(emptyForm);setMode("list");};
-  const totals=calcTotals(form.items);
+  const handleSubmit=()=>{if(!form.partnerId){alert("거래처를 선택하세요.");return;}const totals=calcTotals(form.items,form.includeVat);if(editId){setStatements(p=>p.map(s=>s.id===editId?{...s,...form,...totals,status:"발행완료"}:s));setEditId(null);}else{const nid="S"+String(Math.max(0,...statements.map(s=>parseInt(s.id.replace("S",""))||0))+1).padStart(3,"0");setStatements(p=>[...p,{id:nid,...form,...totals,status:"발행완료"}]);}setForm(emptyForm);setMode("list");};
+  const totals=calcTotals(form.items,form.includeVat);
   const filteredStatements=useMemo(()=>{let list=[...statements];if(viewMode==="byPartner"&&filterPartner)list=list.filter(s=>s.partnerId===filterPartner);if(viewMode==="byDate"){if(filterDateFrom)list=list.filter(s=>s.date>=filterDateFrom);if(filterDateTo)list=list.filter(s=>s.date<=filterDateTo);}return list.sort((a,b)=>b.date.localeCompare(a.date));},[statements,viewMode,filterPartner,filterDateFrom,filterDateTo]);
   if(mode==="form") return (
     <div>
@@ -771,6 +771,7 @@ const StatementPage = ({statements,setStatements,partners,myBiz,products,partner
           <div style={{flex:1,minWidth:160}}><label style={S.label}>거래처</label><select value={form.partnerId} onChange={e=>onPartnerChange(e.target.value)} style={S.select}><option value="">선택...</option>{partners.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
           <div style={{flex:"0 0 130px"}}><label style={S.label}>납품기한</label><input type="date" value={form.dueDate} onChange={e=>setForm({...form,dueDate:e.target.value})} style={S.input}/></div>
           <div style={{flex:"0 0 110px"}}><label style={S.label}>결제조건</label><input value={form.payTerms} onChange={e=>setForm({...form,payTerms:e.target.value})} style={S.input}/></div>
+          <div style={{flex:"0 0 auto",display:"flex",alignItems:"flex-end",paddingBottom:4}}><label style={{display:"flex",alignItems:"center",gap:5,fontSize:12.5,fontWeight:500,color:"#333",cursor:"pointer",whiteSpace:"nowrap"}}><input type="checkbox" checked={form.includeVat} onChange={e=>setForm({...form,includeVat:e.target.checked})} style={{width:15,height:15,cursor:"pointer"}}/>부가세 포함</label></div>
         </div>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",marginBottom:8,fontSize:12}}>
@@ -794,7 +795,7 @@ const StatementPage = ({statements,setStatements,partners,myBiz,products,partner
           <span style={{fontSize:14,fontWeight:800,color:"#1a237e"}}>합계: {fmt(totals.grandTotal)}원</span>
         </div>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:10}}>
-          <button onClick={()=>{if(!form.partnerId){alert("거래처 선택");return;}setPreview({data:{...form,...totals},partner:partners.find(p=>p.id===form.partnerId)});}} style={{...S.btn,background:"#455a64"}}><Eye size={14}/> 미리보기</button>
+          <button onClick={()=>{if(!form.partnerId){alert("거래처 선택");return;}setPreview({data:{...form,...totals,includeVat:form.includeVat},partner:partners.find(p=>p.id===form.partnerId)});}} style={{...S.btn,background:"#455a64"}}><Eye size={14}/> 미리보기</button>
           <button onClick={handleSubmit} style={S.btn}><Check size={14}/> {editId?"수정":"발행"}</button>
         </div>
       </div>
@@ -823,7 +824,7 @@ const StatementPage = ({statements,setStatements,partners,myBiz,products,partner
               <td style={{padding:"8px 6px",textAlign:"center"}}><span style={{padding:"2px 6px",borderRadius:4,fontSize:10,background:"#e8f5e9",color:"#2e7d32"}}>{s.status}</span></td>
               <td style={{padding:"8px 6px",textAlign:"center",whiteSpace:"nowrap"}}>
                 <button onClick={()=>setPreview({data:s,partner:pt})} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Printer size={13} color="#1565c0"/></button>
-                <button onClick={()=>{setForm({date:s.date,partnerId:s.partnerId,items:s.items,dueDate:s.dueDate,payTerms:s.payTerms,memo:s.memo});setEditId(s.id);setMode("form");}} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Edit3 size={13} color="#666"/></button>
+                <button onClick={()=>{setForm({date:s.date,partnerId:s.partnerId,items:s.items,dueDate:s.dueDate,payTerms:s.payTerms,memo:s.memo,includeVat:s.includeVat!==false});setEditId(s.id);setMode("form");}} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Edit3 size={13} color="#666"/></button>
                 <button onClick={()=>{if(confirm("삭제?"))setStatements(p=>p.filter(x=>x.id!==s.id));}} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Trash2 size={13} color="#d32f2f"/></button>
               </td>
             </tr>
