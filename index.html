@@ -760,7 +760,8 @@ const PartnerPricePage = ({partners,products,partnerPrices,setPartnerPrices}) =>
 const StatementPage = ({statements,setStatements,partners,myBiz,products,partnerPrices}) => {
   const today=new Date().toISOString().slice(0,10);
   const emptyItem={productId:"",name:"",spec:"",qty:1,unit:"개",unitPrice:0,note:""};
-  const emptyForm={date:today,partnerId:"",items:[{...emptyItem}],dueDate:"",payTerms:"월말 결제",memo:"",includeVat:true};
+  const lastVatRef=useRef(statements.length?statements[statements.length-1].includeVat!==false:true);
+  const emptyForm={date:today,partnerId:"",items:[{...emptyItem}],dueDate:"",payTerms:"월말 결제",memo:"",includeVat:lastVatRef.current};
   const [form,setForm]=useState(emptyForm);const [editId,setEditId]=useState(null);const [preview,setPreview]=useState(null);const [mode,setMode]=useState("list");
   const [viewMode,setViewMode]=useState("all");const [filterPartner,setFilterPartner]=useState("");const [filterDateFrom,setFilterDateFrom]=useState("");const [filterDateTo,setFilterDateTo]=useState("");
   const getPrice=(prodId,partnerId)=>{if(partnerId&&partnerPrices[partnerId]&&partnerPrices[partnerId][prodId]!=null)return partnerPrices[partnerId][prodId];const prod=products.find(p=>p.id===prodId);return prod?prod.basePrice:0;};
@@ -770,14 +771,14 @@ const StatementPage = ({statements,setStatements,partners,myBiz,products,partner
   const updateItem=(idx,field,val)=>{const items=[...form.items];items[idx]={...items[idx],[field]:field==="qty"||field==="unitPrice"?Number(val)||0:val};setForm({...form,items});};
   const addItem=()=>setForm({...form,items:[...form.items,{...emptyItem}]});
   const removeItem=idx=>{if(form.items.length>1)setForm({...form,items:form.items.filter((_,i)=>i!==idx)});};
-  const handleSubmit=()=>{if(!form.partnerId){alert("거래처를 선택하세요.");return;}const totals=calcTotals(form.items,form.includeVat);if(editId){setStatements(p=>p.map(s=>s.id===editId?{...s,...form,...totals,status:"발행완료"}:s));setEditId(null);}else{const nid="S"+String(Math.max(0,...statements.map(s=>parseInt(s.id.replace("S",""))||0))+1).padStart(3,"0");setStatements(p=>[...p,{id:nid,...form,...totals,status:"발행완료"}]);}setForm(emptyForm);setMode("list");};
+  const handleSubmit=()=>{if(!form.partnerId){alert("거래처를 선택하세요.");return;}const totals=calcTotals(form.items,form.includeVat);lastVatRef.current=form.includeVat;if(editId){setStatements(p=>p.map(s=>s.id===editId?{...s,...form,...totals,status:"발행완료"}:s));setEditId(null);}else{const nid="S"+String(Math.max(0,...statements.map(s=>parseInt(s.id.replace("S",""))||0))+1).padStart(3,"0");setStatements(p=>[...p,{id:nid,...form,...totals,status:"발행완료"}]);}setForm({...emptyForm,includeVat:form.includeVat});setMode("list");};
   const totals=calcTotals(form.items,form.includeVat);
   const filteredStatements=useMemo(()=>{let list=[...statements];if(viewMode==="byPartner"&&filterPartner)list=list.filter(s=>s.partnerId===filterPartner);if(viewMode==="byDate"){if(filterDateFrom)list=list.filter(s=>s.date>=filterDateFrom);if(filterDateTo)list=list.filter(s=>s.date<=filterDateTo);}return list.sort((a,b)=>b.date.localeCompare(a.date));},[statements,viewMode,filterPartner,filterDateFrom,filterDateTo]);
   if(mode==="form") return (
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <h2 style={{fontSize:18,fontWeight:700,color:"#1a1a2e"}}>{editId?"명세서 수정":"거래명세서 작성"}</h2>
-        <button onClick={()=>{setMode("list");setForm(emptyForm);setEditId(null);}} style={S.btnSec}>목록</button>
+        <button onClick={()=>{setMode("list");setForm({...emptyForm,includeVat:lastVatRef.current});setEditId(null);}} style={S.btnSec}>목록</button>
       </div>
       <div style={{...S.card,padding:16}}>
         <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
