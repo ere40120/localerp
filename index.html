@@ -1502,12 +1502,12 @@ function App({user}) {
   const [menuOrder,setMenuOrder]=usePersist("menuOrder",ALL_MENUS.map(m=>m.id));
   const [hiddenMenus,setHiddenMenus]=usePersist("hiddenMenus",[]);
 
-  // 새 메뉴가 추가됐을 때 menuOrder에 자동 반영
+  // 새 메뉴가 추가됐을 때 menuOrder에 자동 반영 (Firebase 데이터 로드 후에도 체크)
   useEffect(()=>{
     const allIds=ALL_MENUS.map(m=>m.id);
     const missing=allIds.filter(id=>!menuOrder.includes(id));
     if(missing.length>0){setMenuOrder(prev=>[...prev,...missing]);}
-  },[]);
+  },[menuOrder]);
   const [myBiz,setMyBiz]=usePersist("myBiz",INIT_BIZ);
   const [products,setProducts]=usePersist("products",INIT_PRODUCTS);
   const [partnerPrices,setPartnerPrices]=usePersist("partnerPrices",INIT_PARTNER_PRICES);
