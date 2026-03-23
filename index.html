@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>LocalERP</title>
+  <meta name="theme-color" content="#1a237e">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="LocalERP">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%231a237e'/><text y='130' x='96' text-anchor='middle' font-size='110' font-family='sans-serif' fill='white'>₩</text></svg>">
+  <script>
+    // PWA 매니페스트 동적 생성 (홈 화면 추가용)
+    window.addEventListener('DOMContentLoaded', function() {
+      var manifest = {
+        name: 'LocalERP',
+        short_name: 'LocalERP',
+        description: '한국형 회계관리 시스템',
+        start_url: window.location.href,
+        display: 'standalone',
+        orientation: 'portrait',
+        background_color: '#1a237e',
+        theme_color: '#1a237e',
+        icons: [{
+          src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%231a237e'/><text y='130' x='96' text-anchor='middle' font-size='110' font-family='sans-serif' fill='white'>%E2%82%A9</text></svg>",
+          sizes: '192x192',
+          type: 'image/svg+xml'
+        }]
+      };
+      var blob = new Blob([JSON.stringify(manifest)], {type: 'application/manifest+json'});
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('link');
+      link.rel = 'manifest';
+      link.href = url;
+      document.head.appendChild(link);
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.24.0/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide-react@0.383.0/dist/umd/lucide-react.js" onerror="console.warn('lucide-react CDN failed')"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script>
+    // lucide-react가 로드 실패해도 앱이 작동하도록 SVG 폴백 아이콘 정의
+    (function() {
+      if (!window.LucideReact) window.LucideReact = {};
+      var LR = window.LucideReact;
+      var iconNames = ['BookOpen','FileText','BarChart3','Users','Settings','Plus','Trash2',
+        'ChevronRight','ChevronDown','Home','Calculator','DollarSign','TrendingUp','TrendingDown',
+        'Edit3','X','Check','Layers','Printer','Eye','EyeOff','Receipt','FileCheck','Package',
+        'Building2','GripVertical','Tag','Menu','PieChart','Upload','Download','FileSpreadsheet','AlertCircle',
+        'HardDrive','RotateCcw','Save','Clock','CheckCircle','Info'];
+      var svgMap = {
+        Home:'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z',
+        Plus:'M12 5v14M5 12h14', Trash2:'M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6',
+        ChevronRight:'M9 18l6-6-6-6', ChevronDown:'M6 9l6 6 6-6',
+        X:'M18 6L6 18M6 6l12 12', Check:'M20 6L9 17l-5-5',
+        Settings:'M12 15a3 3 0 100-6 3 3 0 000 6z',
+        Menu:'M3 12h18M3 6h18M3 18h18',
+        Edit3:'M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7',
+        Printer:'M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2',
+        Eye:'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z',
+        EyeOff:'M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22',
+        TrendingUp:'M23 6l-9.5 9.5-5-5L1 18', TrendingDown:'M23 18l-9.5-9.5-5 5L1 6',
+        BarChart3:'M18 20V10M12 20V4M6 20v-6',
+        Users:'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75',
+        FileText:'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8',
+        BookOpen:'M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2zM22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z',
+        Calculator:'M4 2h16a2 2 0 012 2v16a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2zM8 6h8M8 10h2M12 10h2M16 10h2M8 14h2M12 14h2M16 14v4M8 18h2M12 18h2',
+        DollarSign:'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6',
+        Layers:'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
+        Receipt:'M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z',
+        FileCheck:'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M9 15l2 2 4-4',
+        Package:'M16.5 9.4l-9-5.19M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 002 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12',
+        Building2:'M6 22V4a2 2 0 012-2h8a2 2 0 012 2v18zM6 12H4a2 2 0 00-2 2v8h4M18 9h2a2 2 0 012 2v11h-4M10 6h4M10 10h4M10 14h4M10 18h4',
+        GripVertical:'M9 5h1M9 12h1M9 19h1M14 5h1M14 12h1M14 19h1',
+        Tag:'M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82zM7 7h.01',
+        PieChart:'M21.21 15.89A10 10 0 118 2.83M22 12A10 10 0 0012 2v10z',
+        Upload:'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12',
+        Download:'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3',
+        FileSpreadsheet:'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M8 13h2M8 17h2M12 13h4M12 17h4',
+        AlertCircle:'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 8v4M12 16h.01',
+        HardDrive:'M22 12H2M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11zM6 16h.01M10 16h.01',
+        RotateCcw:'M1 4v6h6M3.51 15a9 9 0 102.13-9.36L1 10',
+        Save:'M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2zM17 21v-8H7v8M7 3v5h8',
+        Clock:'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2',
+        CheckCircle:'M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3',
+        Info:'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 16v-4M12 8h.01'
+      };
+      iconNames.forEach(function(name) {
+        if (!LR[name]) {
+          LR[name] = function(props) {
+            var size = (props && props.size) || 18;
+            var color = (props && props.color) || 'currentColor';
+            var d = svgMap[name] || '';
+            return React.createElement('svg', {
+              width: size, height: size, viewBox: '0 0 24 24',
+              fill: 'none', stroke: color, strokeWidth: 2,
+              strokeLinecap: 'round', strokeLinejoin: 'round',
+              style: props && props.style, className: props && props.className
+            }, React.createElement('path', {d: d}));
+          };
+        }
+      });
+    })();
+  </script>
+  <!-- Firebase SDK (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCuD41hZtgcdNwyQudb3IXha6ejaCRC39A",
+      authDomain: "localerp-d5b28.firebaseapp.com",
+      databaseURL: "https://localerp-d5b28-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "localerp-d5b28",
+      storageBucket: "localerp-d5b28.firebasestorage.app",
+      messagingSenderId: "645935434160",
+      appId: "1:645935434160:web:b72b16a15646229983ae75",
+      measurementId: "G-WWJT7CZ75W"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const __db = firebase.database();
+    const __auth = firebase.auth();
+  </script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Noto Sans KR',-apple-system,sans-serif;background:#f4f5f7;}
+    .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;}
+    @media(max-width:768px){
+      .sidebar-overlay.open{display:block;}
+      .sidebar{position:fixed!important;left:-220px;top:0;z-index:101;transition:left 0.25s;height:100vh!important;}
+      .sidebar.open{left:0!important;}
+      .main-content{padding:12px!important;}
+      .topbar{display:flex!important;}
+    }
+    .topbar{display:none;align-items:center;gap:12px;padding:12px 16px;background:linear-gradient(90deg,#1a237e,#283593);color:#fff;position:sticky;top:0;z-index:99;}
+    .hamburger{background:none;border:none;color:#fff;cursor:pointer;padding:4px;}
+    table{min-width:100%;}
+    @media(max-width:480px){
+      .hide-mobile{display:none!important;}
+      td,th{padding:6px 4px!important;font-size:11px!important;}
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useEffect, useCallback, useRef } = React;
+const LR = window.LucideReact || {};
+const BookOpen=LR.BookOpen, FileText=LR.FileText, BarChart3=LR.BarChart3, Users=LR.Users,
+  Settings=LR.Settings, Plus=LR.Plus, Trash2=LR.Trash2, ChevronRight=LR.ChevronRight,
+  ChevronDown=LR.ChevronDown, Home=LR.Home, Calculator=LR.Calculator, DollarSign=LR.DollarSign,
+  TrendingUp=LR.TrendingUp, TrendingDown=LR.TrendingDown, Edit3=LR.Edit3, X=LR.X,
+  Check=LR.Check, Layers=LR.Layers, Printer=LR.Printer, Eye=LR.Eye, EyeOff=LR.EyeOff,
+  Receipt=LR.Receipt, FileCheck=LR.FileCheck, Package=LR.Package, Building2=LR.Building2,
+  GripVertical=LR.GripVertical, Tag=LR.Tag, Menu=LR.Menu, PieChart=LR.PieChart,
+  Upload=LR.Upload, Download=LR.Download, FileSpreadsheet=LR.FileSpreadsheet, AlertCircle=LR.AlertCircle,
+  HardDrive=LR.HardDrive, RotateCcw=LR.RotateCcw, Save=LR.Save, Clock=LR.Clock, CheckCircle=LR.CheckCircle, Info=LR.Info;
+
+// Firebase 사용 가능 여부 확인
+const _useFirebase = typeof __db !== 'undefined' && __db !== null;
+
+// uid를 전역으로 관리 (usePersist에서 참조)
+let __uid = null;
+
+function usePersist(key, init) {
+  const [val, setVal] = useState(() => {
+    if (!_useFirebase) {
+      try { const s=localStorage.getItem(key); return s?JSON.parse(s):init; } catch { return init; }
+    }
+    return init;
+  });
+  const loadedRef = useRef(false);
+
+  useEffect(() => {
+    if (!_useFirebase || !__uid) return;
+    try {
+      const dbRef = __db.ref('users/' + __uid + '/acc/' + key);
+      dbRef.on('value', snapshot => {
+        const data = snapshot.val();
+        if (data !== null && data !== undefined) {
+          setVal(data);
+        } else if (!loadedRef.current) {
+          dbRef.set(init);
+        }
+        loadedRef.current = true;
+      }, err => {
+        console.warn('Firebase read error:', err);
+      });
+      return () => dbRef.off();
+    } catch(e) {
+      console.warn('Firebase effect error:', e);
+    }
+  }, [key, __uid]);
+
+  const set = useCallback(v => {
+    setVal(prev => {
+      const next = typeof v === 'function' ? v(prev) : v;
+      if (_useFirebase && __uid) {
+        try { __db.ref('users/' + __uid + '/acc/' + key).set(next); } catch(e) { console.warn(e); }
+      } else {
+        try { localStorage.setItem(key, JSON.stringify(next)); } catch {}
+      }
+      return next;
+    });
+  }, [key]);
+
+  return [val, set];
+}
+
+// 로그인 화면 컴포넌트
+function LoginScreen({onLogin}) {
+  const [mode, setMode] = useState('login'); // 'login' | 'signup'
+  const [email, setEmail] = useState('');
+  const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const errMap = {
+    'auth/user-not-found': '등록되지 않은 이메일이에요.',
+    'auth/wrong-password': '비밀번호가 틀렸어요.',
+    'auth/email-already-in-use': '이미 사용 중인 이메일이에요.',
+    'auth/weak-password': '비밀번호는 6자 이상이어야 해요.',
+    'auth/invalid-email': '이메일 형식이 올바르지 않아요.',
+    'auth/invalid-credential': '이메일 또는 비밀번호를 확인해주세요.',
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setErr('');
+    if (mode === 'signup' && pw !== pw2) { setErr('비밀번호가 일치하지 않아요.'); return; }
+    setLoading(true);
+    try {
+      if (mode === 'login') {
+        await __auth.signInWithEmailAndPassword(email, pw);
+      } else {
+        await __auth.createUserWithEmailAndPassword(email, pw);
+      }
+    } catch(e) {
+      setErr(errMap[e.code] || e.message);
+    }
+    setLoading(false);
+  };
+
+  const handleGoogleLogin = async () => {
+    setErr('');
+    setLoading(true);
+    try {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      await __auth.signInWithPopup(provider);
+    } catch(e) {
+      if (e.code !== 'auth/popup-closed-by-user') {
+        setErr(errMap[e.code] || e.message);
+      }
+    }
+    setLoading(false);
+  };
+
+  const S = {
+    wrap: {minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'linear-gradient(135deg,#1a237e,#283593)',padding:20},
+    card: {background:'#fff',borderRadius:16,padding:'36px 28px',width:'100%',maxWidth:360,boxShadow:'0 8px 32px rgba(0,0,0,0.18)'},
+    logo: {textAlign:'center',marginBottom:28},
+    title: {fontSize:28,fontWeight:700,color:'#1a237e'},
+    sub: {fontSize:13,color:'#888',marginTop:4},
+    label: {fontSize:13,fontWeight:600,color:'#444',marginBottom:6,display:'block'},
+    input: {width:'100%',padding:'11px 14px',borderRadius:8,border:'1px solid #ddd',fontSize:15,outline:'none',marginBottom:14,boxSizing:'border-box'},
+    btn: {width:'100%',padding:'13px',borderRadius:8,background:'#1a237e',color:'#fff',border:'none',fontSize:16,fontWeight:700,cursor:'pointer',marginTop:4},
+    err: {background:'#fff3f3',color:'#c62828',borderRadius:8,padding:'10px 14px',fontSize:13,marginBottom:14,textAlign:'center'},
+    toggle: {textAlign:'center',marginTop:18,fontSize:13,color:'#666'},
+    link: {color:'#1a237e',fontWeight:700,cursor:'pointer',marginLeft:4},
+    divider: {display:'flex',alignItems:'center',margin:'18px 0',gap:10},
+    dividerLine: {flex:1,height:1,background:'#e0e0e0'},
+    dividerText: {fontSize:12,color:'#aaa',whiteSpace:'nowrap'},
+    googleBtn: {width:'100%',padding:'12px',borderRadius:8,background:'#fff',color:'#444',border:'1.5px solid #ddd',fontSize:15,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:10,boxShadow:'0 1px 3px rgba(0,0,0,0.08)'},
+  };
+
+  return (
+    <div style={S.wrap}>
+      <div style={S.card}>
+        <div style={S.logo}>
+          <div style={S.title}>₩ LocalERP</div>
+          <div style={S.sub}>한국형 회계관리 시스템</div>
+        </div>
+        <form onSubmit={handleSubmit}>
+          {err && <div style={S.err}>{err}</div>}
+          <label style={S.label}>이메일</label>
+          <input style={S.input} type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="이메일 입력" required autoComplete="email"/>
+          <label style={S.label}>비밀번호</label>
+          <input style={S.input} type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="비밀번호 입력" required autoComplete={mode==='login'?'current-password':'new-password'}/>
+          {mode === 'signup' && <>
+            <label style={S.label}>비밀번호 확인</label>
+            <input style={S.input} type="password" value={pw2} onChange={e=>setPw2(e.target.value)} placeholder="비밀번호 다시 입력" required/>
+          </>}
+          <button style={{...S.btn, opacity: loading ? 0.7 : 1}} type="submit" disabled={loading}>
+            {loading ? '처리 중...' : mode === 'login' ? '로그인' : '회원가입'}
+          </button>
+        </form>
+        <div style={S.divider}>
+          <div style={S.dividerLine}/>
+          <span style={S.dividerText}>또는</span>
+          <div style={S.dividerLine}/>
+        </div>
+        <button style={{...S.googleBtn, opacity: loading ? 0.7 : 1}} type="button" onClick={handleGoogleLogin} disabled={loading}>
+          <svg width="20" height="20" viewBox="0 0 48 48">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          </svg>
+          Google로 {mode === 'login' ? '로그인' : '가입'}
+        </button>
+        <div style={S.toggle}>
+          {mode === 'login' ? <>계정이 없으신가요?<span style={S.link} onClick={()=>{setMode('signup');setErr('');}}>회원가입</span></> : <>이미 계정이 있으신가요?<span style={S.link} onClick={()=>{setMode('login');setErr('');}}>로그인</span></>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 인증 상태 관리 루트 컴포넌트
+function AuthRoot() {
+  const [user, setUser] = useState(undefined); // undefined=로딩중, null=비로그인
+
+  useEffect(() => {
+    if (!_useFirebase) { setUser(null); return; }
+    const unsub = __auth.onAuthStateChanged(u => {
+      __uid = u ? u.uid : null;
+      setUser(u);
+    });
+    return () => unsub();
+  }, []);
+
+  if (user === undefined) {
+    return (
+      <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#1a237e'}}>
+        <div style={{color:'#fff',fontSize:18,fontWeight:600}}>₩ LocalERP 로딩 중...</div>
+      </div>
+    );
+  }
+  if (!user) return <LoginScreen/>;
+  return <App user={user}/>;
+}
+
+const INIT_BIZ = { name:"주식회사 이지솔루션", bizNo:"123-45-67890", ceo:"홍길동", addr:"서울시 강남구 테헤란로 123", tel:"02-555-1234", fax:"02-555-1235", email:"info@easysol.co.kr", 업태:"서비스업", 종목:"소프트웨어 개발" };
+const INIT_PRODUCTS = [
+  { id:"PRD001", name:"웹개발 용역", spec:"프론트엔드", unit:"식", basePrice:15000000, category:"용역" },
+  { id:"PRD002", name:"서버 유지보수", spec:"월정액", unit:"건", basePrice:5000000, category:"용역" },
+  { id:"PRD003", name:"시스템 컨설팅", spec:"IT전략", unit:"식", basePrice:20000000, category:"컨설팅" },
+  { id:"PRD004", name:"데이터 분석", spec:"월간리포트", unit:"건", basePrice:5000000, category:"분석" },
+  { id:"PRD005", name:"UI/UX 디자인", spec:"앱디자인", unit:"식", basePrice:8000000, category:"디자인" },
+];
+const INIT_PARTNER_PRICES = { "P001": { "PRD001": 14000000, "PRD002": 4500000 }, "P002": { "PRD003": 18000000 } };
+const INIT_ACCOUNTS = [
+  {code:"101",name:"현금",category:"자산",subcategory:"유동자산",type:"debit"},
+  {code:"102",name:"보통예금",category:"자산",subcategory:"유동자산",type:"debit"},
+  {code:"110",name:"매출채권",category:"자산",subcategory:"유동자산",type:"debit"},
+  {code:"113",name:"선급금",category:"자산",subcategory:"유동자산",type:"debit"},
+  {code:"121",name:"상품",category:"자산",subcategory:"유동자산",type:"debit"},
+  {code:"150",name:"토지",category:"자산",subcategory:"비유동자산",type:"debit"},
+  {code:"155",name:"비품",category:"자산",subcategory:"비유동자산",type:"debit"},
+  {code:"201",name:"매입채무",category:"부채",subcategory:"유동부채",type:"credit"},
+  {code:"203",name:"미지급금",category:"부채",subcategory:"유동부채",type:"credit"},
+  {code:"205",name:"예수금",category:"부채",subcategory:"유동부채",type:"credit"},
+  {code:"208",name:"부가세예수금",category:"부채",subcategory:"유동부채",type:"credit"},
+  {code:"210",name:"단기차입금",category:"부채",subcategory:"유동부채",type:"credit"},
+  {code:"301",name:"자본금",category:"자본",subcategory:"자본금",type:"credit"},
+  {code:"320",name:"이익잉여금",category:"자본",subcategory:"이익잉여금",type:"credit"},
+  {code:"401",name:"매출",category:"수익",subcategory:"매출",type:"credit"},
+  {code:"402",name:"상품매출",category:"수익",subcategory:"매출",type:"credit"},
+  {code:"404",name:"용역매출",category:"수익",subcategory:"매출",type:"credit"},
+  {code:"450",name:"이자수익",category:"수익",subcategory:"영업외수익",type:"credit"},
+  {code:"501",name:"매출원가",category:"비용",subcategory:"매출원가",type:"debit"},
+  {code:"510",name:"급여",category:"비용",subcategory:"판매비와관리비",type:"debit"},
+  {code:"512",name:"복리후생비",category:"비용",subcategory:"판매비와관리비",type:"debit"},
+  {code:"515",name:"통신비",category:"비용",subcategory:"판매비와관리비",type:"debit"},
+  {code:"516",name:"수도광열비",category:"비용",subcategory:"판매비와관리비",type:"debit"},
+  {code:"519",name:"임차료",category:"비용",subcategory:"판매비와관리비",type:"debit"},
+  {code:"525",name:"소모품비",category:"비용",subcategory:"판매비와관리비",type:"debit"},
+  {code:"526",name:"지급수수료",category:"비용",subcategory:"판매비와관리비",type:"debit"},
+];
+const INIT_PARTNERS = [
+  {id:"P001",name:"(주)삼성전자",bizNo:"124-81-00998",ceo:"한종희",addr:"경기도 수원시 영통구",tel:"02-2255-0114",업태:"제조업",종목:"전자제품",type:"매출처",email:"order@samsung.com"},
+  {id:"P002",name:"(주)현대자동차",bizNo:"101-81-15400",ceo:"장재훈",addr:"서울시 서초구 헌릉로",tel:"02-3464-1114",업태:"제조업",종목:"자동차",type:"매출처",email:"biz@hyundai.com"},
+  {id:"P003",name:"(주)신세계",bizNo:"104-81-34838",ceo:"강희석",addr:"서울시 중구 소공로",tel:"02-727-1234",업태:"도소매",종목:"백화점",type:"매입처",email:"trade@ssg.com"},
+  {id:"P004",name:"한국전력공사",bizNo:"305-11-00001",ceo:"김동철",addr:"전남 나주시 전력로",tel:"061-345-3114",업태:"서비스",종목:"전력공급",type:"매입처",email:"bill@kepco.co.kr"},
+];
+const INIT_VOUCHERS = [
+  {id:1,date:"2026-01-05",type:"입금",description:"자본금 납입",debitAccount:"102",creditAccount:"301",debitAmount:50000000,creditAmount:50000000,partner:"",memo:"법인설립"},
+  {id:2,date:"2026-01-15",type:"출금",description:"비품 구입",debitAccount:"155",creditAccount:"102",debitAmount:3000000,creditAmount:3000000,partner:"P003",memo:"컴퓨터"},
+  {id:3,date:"2026-02-01",type:"입금",description:"용역매출",debitAccount:"110",creditAccount:"404",debitAmount:22000000,creditAmount:22000000,partner:"P001",memo:"1월"},
+  {id:4,date:"2026-02-05",type:"출금",description:"급여",debitAccount:"510",creditAccount:"102",debitAmount:8000000,creditAmount:8000000,partner:"",memo:"급여"},
+  {id:5,date:"2026-02-10",type:"입금",description:"매출대금",debitAccount:"102",creditAccount:"110",debitAmount:22000000,creditAmount:22000000,partner:"P001",memo:"입금"},
+  {id:6,date:"2026-03-01",type:"입금",description:"용역매출",debitAccount:"110",creditAccount:"404",debitAmount:27500000,creditAmount:27500000,partner:"P002",memo:"2월"},
+  {id:7,date:"2026-03-05",type:"출금",description:"급여",debitAccount:"510",creditAccount:"102",debitAmount:8000000,creditAmount:8000000,partner:"",memo:"급여"},
+  {id:8,date:"2026-03-10",type:"출금",description:"임차료",debitAccount:"519",creditAccount:"102",debitAmount:1500000,creditAmount:1500000,partner:"",memo:"사무실"},
+];
+const INIT_STATEMENTS = [
+  {id:"S001",date:"2026-02-01",partnerId:"P001",items:[{productId:"PRD001",name:"웹개발 용역",spec:"프론트엔드",qty:1,unit:"식",unitPrice:14000000,note:"1월분"},{productId:"PRD002",name:"서버 유지보수",spec:"월정액",qty:1,unit:"건",unitPrice:4500000,note:"1월분"}],supplyTotal:18500000,vatTotal:1850000,grandTotal:20350000,dueDate:"2026-02-28",payTerms:"월말 결제",status:"발행완료",memo:""},
+  {id:"S002",date:"2026-03-01",partnerId:"P002",items:[{productId:"PRD003",name:"시스템 컨설팅",spec:"IT전략",qty:1,unit:"식",unitPrice:18000000,note:"2월분"},{productId:"PRD004",name:"데이터 분석",spec:"월간리포트",qty:1,unit:"건",unitPrice:5000000,note:"2월분"}],supplyTotal:23000000,vatTotal:2300000,grandTotal:25300000,dueDate:"2026-03-31",payTerms:"월말 결제",status:"발행완료",memo:""},
+];
+const INIT_TAXINVOICES = [
+  {id:"T001",issueDate:"2026-02-01",partnerId:"P001",supplyDate:"2026-01-31",items:[{date:"01",name:"웹개발 용역",spec:"프론트엔드",qty:1,unitPrice:14000000,supply:14000000,vat:1400000},{date:"01",name:"서버 유지보수",spec:"월정액",qty:1,unitPrice:4500000,supply:4500000,vat:450000}],supplyTotal:18500000,vatTotal:1850000,grandTotal:20350000,status:"발행완료",note:"1월분",cashAmt:0,chkAmt:0,promAmt:0,creditAmt:20350000},
+  {id:"T002",issueDate:"2026-03-01",partnerId:"P002",supplyDate:"2026-02-28",items:[{date:"01",name:"시스템 컨설팅",spec:"IT전략",qty:1,unitPrice:18000000,supply:18000000,vat:1800000},{date:"01",name:"데이터 분석",spec:"월간리포트",qty:1,unitPrice:5000000,supply:5000000,vat:500000}],supplyTotal:23000000,vatTotal:2300000,grandTotal:25300000,status:"발행완료",note:"2월분",cashAmt:0,chkAmt:0,promAmt:0,creditAmt:25300000},
+];
+const ALL_MENUS = [
+  {id:"dashboard",label:"대시보드",icon:Home},{id:"statement",label:"거래명세서",icon:Receipt},
+  {id:"taxinvoice",label:"세금계산서",icon:FileCheck},{id:"voucher",label:"전표입력",icon:Edit3},
+  {id:"journal",label:"분개장",icon:BookOpen},{id:"ledger",label:"총계정원장",icon:Layers},
+  {id:"trial",label:"시산표",icon:Calculator},{id:"bs",label:"재무상태표",icon:FileText},
+  {id:"is",label:"손익계산서",icon:BarChart3},{id:"partners",label:"거래처관리",icon:Users},
+  {id:"accounts",label:"계정과목관리",icon:Settings},{id:"products",label:"품목/단가관리",icon:Package},
+  {id:"partnerPrice",label:"거래처별 단가",icon:Tag},{id:"bizSettings",label:"회사정보 설정",icon:Building2},
+  {id:"backup",label:"백업/복원",icon:HardDrive},
+];
+const fmt = n => (n||0).toLocaleString("ko-KR");
+const fmtW = n => "₩"+Math.abs(n||0).toLocaleString("ko-KR");
+const toHanja = n => {
+  const d=["영","일","이","삼","사","오","육","칠","팔","구"],u=["","십","백","천"],bg=["","만","억","조"];
+  if(!n)return"영";let s="",num=Math.abs(n),bi=0;
+  while(num>0){let ch=num%10000,cs="";for(let i=0;ch>0;i++){let dd=ch%10;if(dd>0)cs=(dd===1&&i>0?"":d[dd])+u[i]+cs;ch=Math.floor(ch/10);}if(cs)s=cs+bg[bi]+s;num=Math.floor(num/10000);bi++;}
+  return s+"원정(\\"+fmt(Math.abs(n))+")";
+};
+const printCSS=`@media print{body>div{display:none!important}#print-area{display:block!important;position:fixed;top:0;left:0;width:100%}}`;
+const S={
+  input:{padding:"7px 10px",border:"1px solid #d0d5dd",borderRadius:6,fontSize:13,outline:"none",width:"100%"},
+  select:{padding:"7px 10px",border:"1px solid #d0d5dd",borderRadius:6,fontSize:13,outline:"none",width:"100%",background:"#fff"},
+  label:{fontSize:11.5,fontWeight:500,color:"#555",marginBottom:3,display:"block"},
+  btn:{padding:"8px 18px",background:"#1a237e",color:"#fff",border:"none",borderRadius:6,fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5},
+  btnSec:{padding:"8px 14px",background:"#f5f5f5",color:"#666",border:"1px solid #ddd",borderRadius:6,fontSize:13,cursor:"pointer"},
+  btnSm:{padding:"4px 10px",background:"#f5f5f5",color:"#555",border:"1px solid #ddd",borderRadius:5,fontSize:12,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:3},
+  card:{background:"#fff",borderRadius:10,boxShadow:"0 1px 3px rgba(0,0,0,0.08)",border:"1px solid #e8eaed"},
+  th:{padding:"10px 8px",textAlign:"left",fontWeight:600,color:"#555",fontSize:12,whiteSpace:"nowrap"},
+};
+
+const Sidebar = ({activeMenu,setActiveMenu,menuOrder,setMenuOrder,hiddenMenus,setHiddenMenus,onClose,isOpen}) => {
+  const orderedMenus = menuOrder.map(id=>ALL_MENUS.find(m=>m.id===id)).filter(Boolean);
+  const [editMode,setEditMode]=useState(false);
+  const [dragIdx,setDragIdx]=useState(null);
+  const [dragOverIdx,setDragOverIdx]=useState(null);
+  const listRef=React.useRef(null);
+  const ds=React.useRef({on:false});
+  const cntRef=React.useRef(orderedMenus.length);
+  cntRef.current=orderedMenus.length;
+  const toggleHide=(id)=>{setHiddenMenus(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);};
+  const moveMenu=(idx,dir)=>{
+    setMenuOrder(prev=>{const a=[...prev];const ni=idx+dir;if(ni<0||ni>=a.length)return prev;[a[idx],a[ni]]=[a[ni],a[idx]];return a;});
+  };
+
+  React.useEffect(()=>{
+    const el=listRef.current;
+    if(!el)return;
+    const onMove=(e)=>{
+      if(!ds.current.on)return;
+      const delta=e.clientY-ds.current.startY;
+      const steps=Math.round(delta/ds.current.h);
+      const over=Math.max(0,Math.min(cntRef.current-1,ds.current.idx+steps));
+      if(over!==ds.current.over){ds.current.over=over;setDragOverIdx(over);}
+    };
+    const onUp=(e)=>{
+      if(!ds.current.on)return;
+      const {idx,over}=ds.current;
+      ds.current={on:false};
+      if(over!=null&&idx!==over){
+        setMenuOrder(prev=>{const a=[...prev];const[r]=a.splice(idx,1);a.splice(over,0,r);return a;});
+      }
+      setDragIdx(null);setDragOverIdx(null);
+    };
+    el.addEventListener('pointermove',onMove);
+    el.addEventListener('pointerup',onUp);
+    el.addEventListener('pointercancel',onUp);
+    return()=>{el.removeEventListener('pointermove',onMove);el.removeEventListener('pointerup',onUp);el.removeEventListener('pointercancel',onUp);};
+  },[setMenuOrder]);
+
+  const onPD=(e,idx)=>{
+    if(!editMode)return;
+    e.preventDefault();
+    const h=e.currentTarget.getBoundingClientRect().height;
+    try{e.currentTarget.setPointerCapture(e.pointerId);}catch(_){}
+    ds.current={on:true,idx,over:idx,startY:e.clientY,h};
+    setDragIdx(idx);setDragOverIdx(idx);
+  };
+
+  const visibleMenus=editMode?orderedMenus:orderedMenus.filter(m=>!hiddenMenus.includes(m.id));
+  const hiddenCount=hiddenMenus.length;
+  return (
+    <div className={"sidebar"+(isOpen?" open":"")} style={{width:220,minHeight:"100vh",background:"linear-gradient(180deg,#1a237e,#283593)",color:"#fff",flexShrink:0,display:"flex",flexDirection:"column"}}>
+      <div style={{padding:"18px 16px",borderBottom:"1px solid rgba(255,255,255,0.12)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div><div style={{fontSize:19,fontWeight:700}}>LocalERP</div><div style={{fontSize:11,opacity:0.6,marginTop:2}}>한국형 회계관리 시스템</div></div>
+        {onClose&&<button onClick={onClose} style={{background:"none",border:"none",color:"#fff",cursor:"pointer",opacity:0.7}}><X size={18}/></button>}
+      </div>
+      <div ref={listRef} style={{padding:"6px 0",flex:1,overflowY:editMode?"hidden":"auto",touchAction:editMode?"none":"auto",userSelect:"none"}}>
+        {visibleMenus.map((m,idx)=>{
+          const I=m.icon,act=activeMenu===m.id,isHidden=hiddenMenus.includes(m.id);
+          const isDrag=dragIdx===idx,isOver=dragOverIdx===idx&&dragIdx!=null&&dragIdx!==idx;
+          return(
+            <div key={m.id}
+              onPointerDown={editMode?(e)=>onPD(e,idx):undefined}
+              style={{display:"flex",alignItems:"center",opacity:isDrag?0.3:(isHidden?0.4:1),background:isOver?"rgba(144,202,249,0.2)":editMode?"rgba(255,255,255,0.04)":"transparent",borderTop:isOver?"2px solid #90caf9":"2px solid transparent",borderBottom:editMode?"1px solid rgba(255,255,255,0.06)":"none",touchAction:editMode?"none":"auto",cursor:editMode?"grab":"pointer"}}>
+              {editMode&&(
+                <div style={{display:"flex",flexDirection:"column",paddingLeft:4,gap:0,flexShrink:0}}>
+                  <button onPointerDown={(e)=>e.stopPropagation()} onClick={(e)=>{e.stopPropagation();moveMenu(idx,-1);}} disabled={idx===0} style={{background:"none",border:"none",color:"#fff",padding:"1px 5px",opacity:idx===0?0.2:0.7,fontSize:11,cursor:idx===0?"default":"pointer",lineHeight:1}}>▲</button>
+                  <button onPointerDown={(e)=>e.stopPropagation()} onClick={(e)=>{e.stopPropagation();moveMenu(idx,1);}} disabled={idx===orderedMenus.length-1} style={{background:"none",border:"none",color:"#fff",padding:"1px 5px",opacity:idx===orderedMenus.length-1?0.2:0.7,fontSize:11,cursor:idx===orderedMenus.length-1?"default":"pointer",lineHeight:1}}>▼</button>
+                </div>
+              )}
+              {editMode&&(
+                <button onPointerDown={(e)=>e.stopPropagation()} onClick={()=>toggleHide(m.id)} style={{background:"none",border:"none",color:"#fff",cursor:"pointer",padding:"0 4px",display:"flex",alignItems:"center",opacity:isHidden?0.4:0.85,flexShrink:0}}>
+                  {isHidden?<EyeOff size={14}/>:<Eye size={14}/>}
+                </button>
+              )}
+              <div onClick={()=>{if(!editMode&&!isHidden){setActiveMenu(m.id);onClose&&onClose();}}}
+                style={{flex:1,display:"flex",alignItems:"center",gap:9,padding:"10px 8px 10px 6px",fontSize:13,fontWeight:act&&!isHidden?600:400,background:act&&!isHidden&&!editMode?"rgba(255,255,255,0.14)":"transparent",borderLeft:act&&!isHidden&&!editMode?"3px solid #90caf9":"3px solid transparent",textDecoration:isHidden?"line-through":"none"}}>
+                {I&&<I size={15} style={{opacity:act&&!isHidden?1:0.65}}/>}{m.label}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{padding:"8px 12px",borderTop:"1px solid rgba(255,255,255,0.1)"}}>
+        <button onClick={()=>setEditMode(!editMode)} style={{background:editMode?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.08)",border:"none",color:"#fff",padding:"6px 12px",borderRadius:5,fontSize:11,cursor:"pointer",width:"100%",opacity:0.8,display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
+          {editMode?<><Check size={11}/> 편집 완료</>:<><Settings size={11}/> 메뉴 편집{hiddenCount>0?` (${hiddenCount}개 숨김)`:""}</>}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const PrintModal = ({children,onClose,title}) => (
+  <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <style>{printCSS}</style>
+    <div style={{background:"#fff",borderRadius:12,width:"95vw",maxWidth:900,maxHeight:"92vh",display:"flex",flexDirection:"column"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 20px",borderBottom:"1px solid #eee"}}>
+        <span style={{fontWeight:700,fontSize:15}}>{title} 미리보기</span>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>window.print()} style={{...S.btn,background:"#2e7d32"}}><Printer size={14}/> 인쇄</button>
+          <button onClick={onClose} style={S.btnSec}><X size={14}/> 닫기</button>
+        </div>
+      </div>
+      <div id="print-area" style={{flex:1,overflow:"auto",padding:20}}>{children}</div>
+    </div>
+  </div>
+);
+
+const StatementPreview = ({stmt,partner,myBiz}) => {
+  const b={border:"1px solid #333",padding:"4px 6px",fontSize:11,lineHeight:1.4};
+  const h={...b,background:"#e8eaf6",fontWeight:700,textAlign:"center"};
+  return (
+    <div style={{width:780,margin:"0 auto",fontFamily:"'Malgun Gothic',sans-serif",color:"#000"}}>
+      <div style={{textAlign:"center",fontSize:20,fontWeight:800,borderBottom:"3px double #333",paddingBottom:8,marginBottom:12}}>거 래 명 세 서</div>
+      <div style={{display:"flex",gap:16,marginBottom:10}}>
+        <div style={{flex:1}}><table style={{width:"100%",borderCollapse:"collapse"}}><tbody>
+          <tr><td style={{...h,width:60}}>공급자</td><td colSpan={3} style={{...b,fontWeight:700,textAlign:"center"}}>{myBiz.name}</td></tr>
+          <tr><td style={h}>사업자번호</td><td style={b}>{myBiz.bizNo}</td><td style={{...h,width:50}}>대표자</td><td style={b}>{myBiz.ceo}</td></tr>
+          <tr><td style={h}>주소</td><td colSpan={3} style={b}>{myBiz.addr}</td></tr>
+          <tr><td style={h}>업태</td><td style={b}>{myBiz.업태}</td><td style={h}>종목</td><td style={b}>{myBiz.종목}</td></tr>
+          <tr><td style={h}>TEL</td><td style={b}>{myBiz.tel}</td><td style={h}>FAX</td><td style={b}>{myBiz.fax}</td></tr>
+        </tbody></table></div>
+        <div style={{flex:1}}><table style={{width:"100%",borderCollapse:"collapse"}}><tbody>
+          <tr><td style={{...h,width:60}}>수 신</td><td colSpan={3} style={{...b,fontWeight:700,textAlign:"center"}}>{partner?.name||""}</td></tr>
+          <tr><td style={h}>사업자번호</td><td style={b}>{partner?.bizNo||""}</td><td style={{...h,width:50}}>대표자</td><td style={b}>{partner?.ceo||""}</td></tr>
+          <tr><td style={h}>주소</td><td colSpan={3} style={b}>{partner?.addr||""}</td></tr>
+          <tr><td style={h}>업태</td><td style={b}>{partner?.업태||""}</td><td style={h}>종목</td><td style={b}>{partner?.종목||""}</td></tr>
+          <tr><td style={h}>TEL</td><td style={b}>{partner?.tel||""}</td><td style={h}>E-mail</td><td style={b}>{partner?.email||""}</td></tr>
+        </tbody></table></div>
+      </div>
+      <table style={{width:"100%",borderCollapse:"collapse",marginBottom:8}}>
+        <thead><tr>{["No","품목명","규격","수량","단위","단가","공급가액","비고"].map((t,i)=><th key={i} style={{...h}}>{t}</th>)}</tr></thead>
+        <tbody>
+          {stmt.items.map((it,i)=><tr key={i}><td style={{...b,textAlign:"center"}}>{i+1}</td><td style={b}>{it.name}</td><td style={{...b,textAlign:"center"}}>{it.spec}</td><td style={{...b,textAlign:"right"}}>{fmt(it.qty)}</td><td style={{...b,textAlign:"center"}}>{it.unit}</td><td style={{...b,textAlign:"right"}}>{fmt(it.unitPrice)}</td><td style={{...b,textAlign:"right"}}>{fmt(it.qty*it.unitPrice)}</td><td style={b}>{it.note}</td></tr>)}
+          {Array.from({length:Math.max(0,8-stmt.items.length)}).map((_,i)=><tr key={"e"+i}>{Array(8).fill(0).map((_,j)=><td key={j} style={{...b,height:22}}>&nbsp;</td>)}</tr>)}
+        </tbody>
+      </table>
+      <table style={{width:"100%",borderCollapse:"collapse",marginBottom:8}}><tbody><tr>
+        <td style={{...h,width:100}}>공급가액</td><td style={{...b,textAlign:"right",fontWeight:700}}>{fmt(stmt.supplyTotal)}</td>
+        <td style={{...h,width:80}}>부가세</td><td style={{...b,textAlign:"right",fontWeight:700}}>{fmt(stmt.vatTotal)}</td>
+        <td style={{...h,width:80}}>총 합계</td><td style={{...b,textAlign:"right",fontWeight:800,fontSize:13}}>{fmt(stmt.grandTotal)}</td>
+      </tr></tbody></table>
+      <div style={{textAlign:"center",fontSize:12,fontWeight:700,padding:8,borderTop:"2px solid #333"}}>합계금액: {toHanja(stmt.grandTotal)}</div>
+    </div>
+  );
+};
+
+const TaxInvHalf = ({inv,partner,myBiz,side}) => {
+  const c={border:"1px solid #000",padding:"3px 5px",fontSize:10.5,lineHeight:1.3};
+  const h={...c,background:"#dde4f0",fontWeight:700,textAlign:"center"};
+  const color=side==="공급자"?"#1a237e":"#c62828";
+  return (
+    <div style={{flex:1,padding:6}}>
+      <div style={{textAlign:"center",fontSize:16,fontWeight:800,color,marginBottom:6,letterSpacing:6}}>세 금 계 산 서</div>
+      <div style={{textAlign:"center",fontSize:9,marginBottom:6,color:"#666"}}>({side} 보관용)</div>
+      {[{label:"공급자",bg:"#1a237e",data:myBiz},{label:"공급받는자",bg:"#c62828",data:partner||{}}].map(sec=>(
+        <div key={sec.label} style={{display:"flex",marginBottom:4}}>
+          <div style={{width:14,background:sec.bg,color:"#fff",fontSize:9,writingMode:"vertical-lr",textAlign:"center",letterSpacing:2,display:"flex",alignItems:"center",justifyContent:"center"}}>{sec.label}</div>
+          <table style={{flex:1,borderCollapse:"collapse"}}><tbody>
+            <tr><td style={{...h,width:55}}>등록번호</td><td colSpan={3} style={{...c,fontWeight:700,letterSpacing:2,textAlign:"center"}}>{sec.data.bizNo||""}</td></tr>
+            <tr><td style={h}>상호</td><td style={c}>{sec.data.name||""}</td><td style={{...h,width:35}}>성명</td><td style={{...c,width:60}}>{sec.data.ceo||""}</td></tr>
+            <tr><td style={h}>주소</td><td colSpan={3} style={c}>{sec.data.addr||""}</td></tr>
+            <tr><td style={h}>업태</td><td style={c}>{sec.data.업태||""}</td><td style={h}>종목</td><td style={c}>{sec.data.종목||""}</td></tr>
+          </tbody></table>
+        </div>
+      ))}
+      <table style={{width:"100%",borderCollapse:"collapse",marginBottom:4}}><tbody><tr>
+        <td style={{...h,width:55}}>작성일</td><td style={{...c,textAlign:"center"}}>{inv.issueDate}</td>
+        <td style={{...h,width:55}}>공급가액</td><td style={{...c,textAlign:"right",fontWeight:700}}>{fmt(inv.supplyTotal)}</td>
+        <td style={{...h,width:40}}>세액</td><td style={{...c,textAlign:"right",fontWeight:700}}>{fmt(inv.vatTotal)}</td>
+      </tr></tbody></table>
+      <table style={{width:"100%",borderCollapse:"collapse",marginBottom:4}}>
+        <thead><tr>{["월일","품목","규격","수량","단가","공급가액","세액"].map((t,i)=><th key={i} style={{...h,fontSize:9}}>{t}</th>)}</tr></thead>
+        <tbody>
+          {inv.items.map((it,i)=><tr key={i}><td style={{...c,textAlign:"center"}}>{it.date}</td><td style={c}>{it.name}</td><td style={{...c,textAlign:"center"}}>{it.spec}</td><td style={{...c,textAlign:"right"}}>{it.qty}</td><td style={{...c,textAlign:"right"}}>{fmt(it.unitPrice)}</td><td style={{...c,textAlign:"right"}}>{fmt(it.supply)}</td><td style={{...c,textAlign:"right"}}>{fmt(it.vat)}</td></tr>)}
+          {Array.from({length:Math.max(0,4-inv.items.length)}).map((_,i)=><tr key={"e"+i}>{Array(7).fill(0).map((_,j)=><td key={j} style={{...c,height:18}}>&nbsp;</td>)}</tr>)}
+        </tbody>
+      </table>
+      <table style={{width:"100%",borderCollapse:"collapse",marginBottom:4}}><tbody>
+        <tr><td style={{...h,width:55}}>합계금액</td><td style={{...c,textAlign:"center",fontWeight:800,fontSize:12}}>{fmt(inv.grandTotal)}</td></tr>
+        <tr><td style={h}>결제</td><td style={c}><div style={{display:"flex",justifyContent:"space-between",fontSize:10}}><span>현금:{fmt(inv.cashAmt)}</span><span>수표:{fmt(inv.chkAmt)}</span><span>어음:{fmt(inv.promAmt)}</span><span>외상:{fmt(inv.creditAmt)}</span></div></td></tr>
+      </tbody></table>
+    </div>
+  );
+};
+const TaxInvoicePreview = ({inv,partner,myBiz}) => (
+  <div style={{width:780,margin:"0 auto",fontFamily:"'Malgun Gothic',sans-serif",color:"#000"}}>
+    <div style={{display:"flex",border:"3px solid #1a237e"}}>
+      <TaxInvHalf inv={inv} partner={partner} myBiz={myBiz} side="공급자"/>
+      <div style={{width:0,borderLeft:"2px dashed #999"}}/>
+      <TaxInvHalf inv={inv} partner={partner} myBiz={myBiz} side="공급받는자"/>
+    </div>
+  </div>
+);
+
+const BizSettings = ({myBiz,setMyBiz}) => {
+  const [form,setForm]=useState({...myBiz});
+  const save=()=>{setMyBiz({...form});alert("회사 정보가 저장되었습니다.");};
+  const fields=[["회사명","name"],["사업자등록번호","bizNo"],["대표자","ceo"],["주소","addr"],["전화번호","tel"],["팩스","fax"],["이메일","email"],["업태","업태"],["종목","종목"]];
+  return (
+    <div>
+      <h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>회사정보 설정</h2>
+      <div style={{...S.card,padding:24,maxWidth:600}}>
+        {fields.map(([label,key])=>(
+          <div key={key} style={{marginBottom:12}}>
+            <label style={S.label}>{label}</label>
+            <input value={form[key]||""} onChange={e=>setForm({...form,[key]:e.target.value})} style={S.input}/>
+          </div>
+        ))}
+        <button onClick={save} style={{...S.btn,marginTop:8}}><Check size={14}/> 저장</button>
+      </div>
+    </div>
+  );
+};
+
+const ProductMgmt = ({products,setProducts}) => {
+  const empty={id:"",name:"",spec:"",unit:"개",basePrice:0,category:""};
+  const [form,setForm]=useState(empty);const [editId,setEditId]=useState(null);
+  const submit=()=>{if(!form.name){alert("품목명을 입력하세요.");return;}if(editId){setProducts(p=>p.map(x=>x.id===editId?{...form}:x));setEditId(null);}else{const nid="PRD"+String(Math.max(0,...products.map(p=>parseInt(p.id.replace("PRD",""))||0))+1).padStart(3,"0");setProducts(p=>[...p,{...form,id:nid,basePrice:Number(form.basePrice)||0}]);}setForm(empty);};
+  return (<div><h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>품목/단가 관리</h2>
+    <div style={{...S.card,padding:18,marginBottom:14}}>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end"}}>
+        <div style={{flex:1,minWidth:140}}><label style={S.label}>품목명</label><input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} style={S.input}/></div>
+        <div style={{flex:"0 0 90px"}}><label style={S.label}>규격</label><input value={form.spec} onChange={e=>setForm({...form,spec:e.target.value})} style={S.input}/></div>
+        <div style={{flex:"0 0 60px"}}><label style={S.label}>단위</label><input value={form.unit} onChange={e=>setForm({...form,unit:e.target.value})} style={S.input}/></div>
+        <div style={{flex:"0 0 130px"}}><label style={S.label}>기본단가</label><input type="number" value={form.basePrice} onChange={e=>setForm({...form,basePrice:e.target.value})} style={{...S.input,textAlign:"right"}}/></div>
+        <div style={{flex:"0 0 90px"}}><label style={S.label}>분류</label><input value={form.category} onChange={e=>setForm({...form,category:e.target.value})} style={S.input}/></div>
+        <button onClick={submit} style={S.btn}>{editId?<><Check size={14}/> 수정</>:<><Plus size={14}/> 추가</>}</button>
+        {editId&&<button onClick={()=>{setForm(empty);setEditId(null);}} style={S.btnSec}>취소</button>}
+      </div>
+    </div>
+    <div style={{...S.card,overflow:"auto"}}>
+      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}>
+        <thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["코드","품목명","규격","단위","기본단가","분류","관리"].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead>
+        <tbody>{products.map(p=>(<tr key={p.id} style={{borderBottom:"1px solid #f0f0f0"}}>
+          <td style={{padding:8,color:"#888"}}>{p.id}</td><td style={{padding:8,fontWeight:500}}>{p.name}</td>
+          <td style={{padding:8}}>{p.spec}</td><td style={{padding:8,textAlign:"center"}}>{p.unit}</td>
+          <td style={{padding:8,textAlign:"right",fontWeight:600,color:"#1565c0"}}>{fmt(p.basePrice)}</td>
+          <td style={{padding:8}}><span style={{padding:"2px 7px",borderRadius:4,fontSize:11,background:"#f3e5f5",color:"#7b1fa2"}}>{p.category}</span></td>
+          <td style={{padding:8,textAlign:"center"}}>
+            <button onClick={()=>{setForm({...p,basePrice:p.basePrice.toString()});setEditId(p.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Edit3 size={12} color="#666"/></button>
+            <button onClick={()=>{if(confirm("삭제?"))setProducts(prev=>prev.filter(x=>x.id!==p.id));}} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Trash2 size={12} color="#d32f2f"/></button>
+          </td>
+        </tr>))}</tbody>
+      </table>
+    </div>
+  </div>);
+};
+
+const PartnerPricePage = ({partners,products,partnerPrices,setPartnerPrices}) => {
+  const [selPartner,setSelPartner]=useState("");
+  const [editingRow,setEditingRow]=useState(null);
+  const [editPrice,setEditPrice]=useState("");
+  const prices = selPartner ? (partnerPrices[selPartner]||{}) : {};
+  const setPrice=(prodId,price)=>{setPartnerPrices(prev=>{const pp={...prev};if(!pp[selPartner]) pp[selPartner]={};if(price===null||price===undefined||price===""||price===0){const cp={...pp[selPartner]};delete cp[prodId];pp[selPartner]=cp;}else{pp[selPartner]={...pp[selPartner],[prodId]:Number(price)};}return pp;});};
+  return (<div><h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>거래처별 단가 설정</h2>
+    <div style={{...S.card,padding:18,marginBottom:14}}>
+      <div style={{flex:"0 0 280px"}}><label style={S.label}>거래처 선택</label>
+        <select value={selPartner} onChange={e=>setSelPartner(e.target.value)} style={S.select}>
+          <option value="">거래처를 선택하세요...</option>
+          {partners.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      </div>
+    </div>
+    {selPartner ? (
+      <div style={{...S.card,overflow:"auto"}}>
+        <div style={{padding:"10px 14px",background:"#f0f4ff",fontWeight:600,color:"#1a237e",borderBottom:"1px solid #e8eaed"}}>{partners.find(p=>p.id===selPartner)?.name} — 품목별 단가</div>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}>
+          <thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["품목","기본단가","특별단가","할인율","관리"].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead>
+          <tbody>{products.map(prod=>{
+            const special=prices[prod.id];const discount=special!=null?((1-special/prod.basePrice)*100).toFixed(1):null;const isEditing=editingRow===prod.id;
+            return (<tr key={prod.id} style={{borderBottom:"1px solid #f0f0f0",background:special!=null?"#fff8e1":"transparent"}}>
+              <td style={{padding:8,fontWeight:500}}>{prod.name}</td>
+              <td style={{padding:8,textAlign:"right",color:"#888"}}>{fmt(prod.basePrice)}</td>
+              <td style={{padding:8,textAlign:"right"}}>{isEditing?(<input type="number" value={editPrice} onChange={e=>setEditPrice(e.target.value)} style={{...S.input,width:100,textAlign:"right",padding:"4px 8px"}} autoFocus onKeyDown={e=>{if(e.key==="Enter"){setPrice(prod.id,editPrice);setEditingRow(null);}}}/>):(<span style={{fontWeight:special!=null?700:400,color:special!=null?"#e65100":"#ccc"}}>{special!=null?fmt(special):"-"}</span>)}</td>
+              <td style={{padding:8,textAlign:"right",color:discount&&parseFloat(discount)>0?"#2e7d32":"#888",fontSize:12}}>{discount!=null?`${discount}%`:"-"}</td>
+              <td style={{padding:8,textAlign:"center"}}>{isEditing?(<><button onClick={()=>{setPrice(prod.id,editPrice);setEditingRow(null);}} style={S.btnSm}><Check size={11}/></button><button onClick={()=>setEditingRow(null)} style={{...S.btnSm,marginLeft:4}}><X size={11}/></button></>):(<><button onClick={()=>{setEditPrice(special!=null?special.toString():"");setEditingRow(prod.id);}} style={S.btnSm}><Edit3 size={11}/> 설정</button>{special!=null&&<button onClick={()=>setPrice(prod.id,null)} style={{...S.btnSm,marginLeft:4,color:"#d32f2f"}}><Trash2 size={11}/></button>}</>)}</td>
+            </tr>);
+          })}</tbody>
+        </table>
+      </div>
+    ) : (<div style={{...S.card,padding:50,textAlign:"center",color:"#999"}}>거래처를 선택하면 품목별 단가를 설정할 수 있습니다.</div>)}
+  </div>);
+};
+
+const StatementPage = ({statements,setStatements,partners,myBiz,products,partnerPrices}) => {
+  const today=new Date().toISOString().slice(0,10);
+  const emptyItem={productId:"",name:"",spec:"",qty:1,unit:"개",unitPrice:0,note:""};
+  const emptyForm={date:today,partnerId:"",items:[{...emptyItem}],dueDate:"",payTerms:"월말 결제",memo:""};
+  const [form,setForm]=useState(emptyForm);const [editId,setEditId]=useState(null);const [preview,setPreview]=useState(null);const [mode,setMode]=useState("list");
+  const [viewMode,setViewMode]=useState("all");const [filterPartner,setFilterPartner]=useState("");const [filterDateFrom,setFilterDateFrom]=useState("");const [filterDateTo,setFilterDateTo]=useState("");
+  const getPrice=(prodId,partnerId)=>{if(partnerId&&partnerPrices[partnerId]&&partnerPrices[partnerId][prodId]!=null)return partnerPrices[partnerId][prodId];const prod=products.find(p=>p.id===prodId);return prod?prod.basePrice:0;};
+  const calcTotals=items=>{const sup=items.reduce((s,it)=>s+(it.qty*it.unitPrice),0);return{supplyTotal:sup,vatTotal:Math.round(sup*0.1),grandTotal:sup+Math.round(sup*0.1)};};
+  const selectProduct=(idx,prodId)=>{const prod=products.find(p=>p.id===prodId);if(!prod)return;const price=getPrice(prodId,form.partnerId);const items=[...form.items];items[idx]={...items[idx],productId:prodId,name:prod.name,spec:prod.spec,unit:prod.unit,unitPrice:price};setForm({...form,items});};
+  const onPartnerChange=(pid)=>{const items=form.items.map(it=>{if(it.productId){const price=getPrice(it.productId,pid);return{...it,unitPrice:price};}return it;});setForm({...form,partnerId:pid,items});};
+  const updateItem=(idx,field,val)=>{const items=[...form.items];items[idx]={...items[idx],[field]:field==="qty"||field==="unitPrice"?Number(val)||0:val};setForm({...form,items});};
+  const addItem=()=>setForm({...form,items:[...form.items,{...emptyItem}]});
+  const removeItem=idx=>{if(form.items.length>1)setForm({...form,items:form.items.filter((_,i)=>i!==idx)});};
+  const handleSubmit=()=>{if(!form.partnerId){alert("거래처를 선택하세요.");return;}const totals=calcTotals(form.items);if(editId){setStatements(p=>p.map(s=>s.id===editId?{...s,...form,...totals,status:"발행완료"}:s));setEditId(null);}else{const nid="S"+String(Math.max(0,...statements.map(s=>parseInt(s.id.replace("S",""))||0))+1).padStart(3,"0");setStatements(p=>[...p,{id:nid,...form,...totals,status:"발행완료"}]);}setForm(emptyForm);setMode("list");};
+  const totals=calcTotals(form.items);
+  const filteredStatements=useMemo(()=>{let list=[...statements];if(viewMode==="byPartner"&&filterPartner)list=list.filter(s=>s.partnerId===filterPartner);if(viewMode==="byDate"){if(filterDateFrom)list=list.filter(s=>s.date>=filterDateFrom);if(filterDateTo)list=list.filter(s=>s.date<=filterDateTo);}return list.sort((a,b)=>b.date.localeCompare(a.date));},[statements,viewMode,filterPartner,filterDateFrom,filterDateTo]);
+  if(mode==="form") return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <h2 style={{fontSize:18,fontWeight:700,color:"#1a1a2e"}}>{editId?"명세서 수정":"거래명세서 작성"}</h2>
+        <button onClick={()=>{setMode("list");setForm(emptyForm);setEditId(null);}} style={S.btnSec}>목록</button>
+      </div>
+      <div style={{...S.card,padding:16}}>
+        <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+          <div style={{flex:"0 0 130px"}}><label style={S.label}>작성일</label><input type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})} style={S.input}/></div>
+          <div style={{flex:1,minWidth:160}}><label style={S.label}>거래처</label><select value={form.partnerId} onChange={e=>onPartnerChange(e.target.value)} style={S.select}><option value="">선택...</option>{partners.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+          <div style={{flex:"0 0 130px"}}><label style={S.label}>납품기한</label><input type="date" value={form.dueDate} onChange={e=>setForm({...form,dueDate:e.target.value})} style={S.input}/></div>
+          <div style={{flex:"0 0 110px"}}><label style={S.label}>결제조건</label><input value={form.payTerms} onChange={e=>setForm({...form,payTerms:e.target.value})} style={S.input}/></div>
+        </div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",marginBottom:8,fontSize:12}}>
+            <thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["품목","품목명","수량","단가","금액",""].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead>
+            <tbody>{form.items.map((it,i)=>(
+              <tr key={i} style={{borderBottom:"1px solid #f0f0f0"}}>
+                <td style={{padding:4,minWidth:120}}><select value={it.productId||""} onChange={e=>selectProduct(i,e.target.value)} style={{...S.select,fontSize:11,padding:"4px 4px"}}><option value="">직접입력</option>{products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></td>
+                <td style={{padding:4,minWidth:100}}><input value={it.name} onChange={e=>updateItem(i,"name",e.target.value)} style={{...S.input,fontSize:11}}/></td>
+                <td style={{padding:4,width:55}}><input type="number" value={it.qty} onChange={e=>updateItem(i,"qty",e.target.value)} style={{...S.input,fontSize:11,textAlign:"right"}}/></td>
+                <td style={{padding:4,width:100}}><input type="number" value={it.unitPrice} onChange={e=>updateItem(i,"unitPrice",e.target.value)} style={{...S.input,fontSize:11,textAlign:"right"}}/></td>
+                <td style={{padding:4,width:90,textAlign:"right",fontWeight:600}}>{fmt(it.qty*it.unitPrice)}</td>
+                <td style={{padding:4,width:28}}><button onClick={()=>removeItem(i)} style={{background:"none",border:"none",cursor:"pointer"}}><Trash2 size={13} color="#d32f2f"/></button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+        <button onClick={addItem} style={{...S.btnSec,fontSize:12,marginBottom:12,display:"flex",alignItems:"center",gap:4}}><Plus size={13}/> 품목 추가</button>
+        <div style={{display:"flex",justifyContent:"flex-end",gap:16,padding:"10px 0",borderTop:"2px solid #e8eaed",fontSize:13,flexWrap:"wrap"}}>
+          <span>공급가액: <strong>{fmt(totals.supplyTotal)}</strong></span>
+          <span>부가세: <strong>{fmt(totals.vatTotal)}</strong></span>
+          <span style={{fontSize:14,fontWeight:800,color:"#1a237e"}}>합계: {fmt(totals.grandTotal)}원</span>
+        </div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:10}}>
+          <button onClick={()=>{if(!form.partnerId){alert("거래처 선택");return;}setPreview({data:{...form,...totals},partner:partners.find(p=>p.id===form.partnerId)});}} style={{...S.btn,background:"#455a64"}}><Eye size={14}/> 미리보기</button>
+          <button onClick={handleSubmit} style={S.btn}><Check size={14}/> {editId?"수정":"발행"}</button>
+        </div>
+      </div>
+      {preview&&<PrintModal title="거래명세서" onClose={()=>setPreview(null)}><StatementPreview stmt={preview.data} partner={preview.partner} myBiz={myBiz}/></PrintModal>}
+    </div>
+  );
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e"}}>거래명세서</h2>
+        <button onClick={()=>setMode("form")} style={S.btn}><Plus size={14}/> 새 거래명세서</button>
+      </div>
+      <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
+        {[["all","전체"],["byPartner","매출처별"],["byDate","일자별"]].map(([v,l])=><button key={v} onClick={()=>setViewMode(v)} style={{padding:"7px 14px",fontSize:12.5,fontWeight:viewMode===v?700:400,background:viewMode===v?"#1a237e":"transparent",color:viewMode===v?"#fff":"#555",border:viewMode===v?"none":"1px solid #ddd",borderRadius:6,cursor:"pointer"}}>{l}</button>)}
+      </div>
+      {viewMode==="byPartner"&&<div style={{...S.card,padding:12,marginBottom:10}}><select value={filterPartner} onChange={e=>setFilterPartner(e.target.value)} style={S.select}><option value="">전체 매출처</option>{partners.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div>}
+      {viewMode==="byDate"&&<div style={{...S.card,padding:12,marginBottom:10,display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end"}}><div style={{flex:"0 0 140px"}}><label style={S.label}>시작일</label><input type="date" value={filterDateFrom} onChange={e=>setFilterDateFrom(e.target.value)} style={S.input}/></div><div style={{flex:"0 0 140px"}}><label style={S.label}>종료일</label><input type="date" value={filterDateTo} onChange={e=>setFilterDateTo(e.target.value)} style={S.input}/></div><button onClick={()=>{setFilterDateFrom("");setFilterDateTo("");}} style={S.btnSec}>초기화</button></div>}
+      <div style={{...S.card,overflow:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["번호","작성일","거래처","합계","상태","관리"].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead>
+          <tbody>{filteredStatements.map(s=>{const pt=partners.find(p=>p.id===s.partnerId);return(
+            <tr key={s.id} style={{borderBottom:"1px solid #f0f0f0"}}>
+              <td style={{padding:"8px 6px",color:"#888"}}>{s.id}</td><td style={{padding:"8px 6px"}}>{s.date}</td>
+              <td style={{padding:"8px 6px",fontWeight:500}}>{pt?.name||""}</td>
+              <td style={{padding:"8px 6px",textAlign:"right",fontWeight:700}}>{fmt(s.grandTotal)}</td>
+              <td style={{padding:"8px 6px",textAlign:"center"}}><span style={{padding:"2px 6px",borderRadius:4,fontSize:10,background:"#e8f5e9",color:"#2e7d32"}}>{s.status}</span></td>
+              <td style={{padding:"8px 6px",textAlign:"center",whiteSpace:"nowrap"}}>
+                <button onClick={()=>setPreview({data:s,partner:pt})} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Printer size={13} color="#1565c0"/></button>
+                <button onClick={()=>{setForm({date:s.date,partnerId:s.partnerId,items:s.items,dueDate:s.dueDate,payTerms:s.payTerms,memo:s.memo});setEditId(s.id);setMode("form");}} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Edit3 size={13} color="#666"/></button>
+                <button onClick={()=>{if(confirm("삭제?"))setStatements(p=>p.filter(x=>x.id!==s.id));}} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Trash2 size={13} color="#d32f2f"/></button>
+              </td>
+            </tr>
+          );})}
+          </tbody>
+        </table>
+        {!filteredStatements.length&&<div style={{padding:40,textAlign:"center",color:"#999"}}>거래명세서가 없습니다.</div>}
+      </div>
+      {preview&&<PrintModal title="거래명세서" onClose={()=>setPreview(null)}><StatementPreview stmt={preview.data} partner={preview.partner} myBiz={myBiz}/></PrintModal>}
+    </div>
+  );
+};
+
+const TaxInvoicePage = ({taxInvoices,setTaxInvoices,partners,myBiz,products,partnerPrices}) => {
+  const today=new Date().toISOString().slice(0,10);
+  const emptyItem={date:"",name:"",spec:"",qty:1,unitPrice:0,supply:0,vat:0,productId:""};
+  const emptyForm={issueDate:today,partnerId:"",supplyDate:"",items:[{...emptyItem}],note:"",cashAmt:0,chkAmt:0,promAmt:0,creditAmt:0};
+  const [form,setForm]=useState(emptyForm);const [editId,setEditId]=useState(null);const [preview,setPreview]=useState(null);const [mode,setMode]=useState("list");
+  const getPrice=(prodId,pid)=>{if(pid&&partnerPrices[pid]?.[prodId]!=null)return partnerPrices[pid][prodId];return products.find(p=>p.id===prodId)?.basePrice||0;};
+  const recalc=item=>{const sup=item.qty*item.unitPrice;return{...item,supply:sup,vat:Math.round(sup*0.1)};};
+  const selectProduct=(idx,prodId)=>{const prod=products.find(p=>p.id===prodId);if(!prod)return;const price=getPrice(prodId,form.partnerId);const items=[...form.items];items[idx]=recalc({...items[idx],productId:prodId,name:prod.name,spec:prod.spec,unitPrice:price});setForm({...form,items});};
+  const onPartnerChange=pid=>{const items=form.items.map(it=>{if(it.productId){const price=getPrice(it.productId,pid);return recalc({...it,unitPrice:price});}return it;});setForm({...form,partnerId:pid,items});};
+  const updateItem=(idx,field,val)=>{const items=[...form.items];items[idx]={...items[idx],[field]:(field==="qty"||field==="unitPrice")?Number(val)||0:val};items[idx]=recalc(items[idx]);setForm({...form,items});};
+  const addItem=()=>setForm({...form,items:[...form.items,{...emptyItem}]});
+  const removeItem=idx=>{if(form.items.length>1)setForm({...form,items:form.items.filter((_,i)=>i!==idx)});};
+  const totals=useMemo(()=>{const sup=form.items.reduce((s,it)=>s+it.supply,0);const vat=form.items.reduce((s,it)=>s+it.vat,0);return{supplyTotal:sup,vatTotal:vat,grandTotal:sup+vat};},[form.items]);
+  const handleSubmit=()=>{if(!form.partnerId){alert("거래처 선택");return;}const data={...form,...totals,creditAmt:form.creditAmt||totals.grandTotal,status:"발행완료"};if(editId){setTaxInvoices(p=>p.map(t=>t.id===editId?{...t,...data}:t));setEditId(null);}else{const nid="T"+String(Math.max(0,...taxInvoices.map(t=>parseInt(t.id.replace("T",""))||0))+1).padStart(3,"0");setTaxInvoices(p=>[...p,{id:nid,...data}]);}setForm(emptyForm);setMode("list");};
+  if(mode==="form") return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <h2 style={{fontSize:18,fontWeight:700,color:"#1a1a2e"}}>{editId?"세금계산서 수정":"세금계산서 발행"}</h2>
+        <button onClick={()=>{setMode("list");setForm(emptyForm);setEditId(null);}} style={S.btnSec}>목록</button>
+      </div>
+      <div style={{...S.card,padding:16}}>
+        <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+          <div style={{flex:"0 0 130px"}}><label style={S.label}>작성일</label><input type="date" value={form.issueDate} onChange={e=>setForm({...form,issueDate:e.target.value})} style={S.input}/></div>
+          <div style={{flex:1,minWidth:160}}><label style={S.label}>공급받는자</label><select value={form.partnerId} onChange={e=>onPartnerChange(e.target.value)} style={S.select}><option value="">선택...</option>{partners.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+          <div style={{flex:"0 0 130px"}}><label style={S.label}>공급일자</label><input type="date" value={form.supplyDate} onChange={e=>setForm({...form,supplyDate:e.target.value})} style={S.input}/></div>
+          <div style={{flex:1,minWidth:100}}><label style={S.label}>비고</label><input value={form.note} onChange={e=>setForm({...form,note:e.target.value})} style={S.input}/></div>
+        </div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",marginBottom:8,fontSize:12}}>
+            <thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["품목","월/일","품목명","수량","단가","공급가액","세액",""].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead>
+            <tbody>{form.items.map((it,i)=>(
+              <tr key={i} style={{borderBottom:"1px solid #f0f0f0"}}>
+                <td style={{padding:4,minWidth:110}}><select value={it.productId||""} onChange={e=>selectProduct(i,e.target.value)} style={{...S.select,fontSize:11,padding:"4px 4px"}}><option value="">직접입력</option>{products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></td>
+                <td style={{padding:4,width:40}}><input value={it.date} onChange={e=>updateItem(i,"date",e.target.value)} style={{...S.input,fontSize:11,textAlign:"center"}}/></td>
+                <td style={{padding:4,minWidth:90}}><input value={it.name} onChange={e=>updateItem(i,"name",e.target.value)} style={{...S.input,fontSize:11}}/></td>
+                <td style={{padding:4,width:50}}><input type="number" value={it.qty} onChange={e=>updateItem(i,"qty",e.target.value)} style={{...S.input,fontSize:11,textAlign:"right"}}/></td>
+                <td style={{padding:4,width:95}}><input type="number" value={it.unitPrice} onChange={e=>updateItem(i,"unitPrice",e.target.value)} style={{...S.input,fontSize:11,textAlign:"right"}}/></td>
+                <td style={{padding:4,width:85,textAlign:"right",fontWeight:600}}>{fmt(it.supply)}</td>
+                <td style={{padding:4,width:70,textAlign:"right",color:"#c62828"}}>{fmt(it.vat)}</td>
+                <td style={{padding:4,width:28}}><button onClick={()=>removeItem(i)} style={{background:"none",border:"none",cursor:"pointer"}}><Trash2 size={13} color="#d32f2f"/></button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+        <button onClick={addItem} style={{...S.btnSec,fontSize:12,marginBottom:12,display:"flex",alignItems:"center",gap:4}}><Plus size={13}/> 품목 추가</button>
+        <div style={{display:"flex",justifyContent:"flex-end",gap:16,padding:"10px 0",borderTop:"2px solid #e8eaed",fontSize:13,flexWrap:"wrap"}}>
+          <span>공급가액: <strong>{fmt(totals.supplyTotal)}</strong></span>
+          <span>부가세: <strong style={{color:"#c62828"}}>{fmt(totals.vatTotal)}</strong></span>
+          <span style={{fontSize:14,fontWeight:800,color:"#1a237e"}}>합계: {fmt(totals.grandTotal)}원</span>
+        </div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:10}}>
+          <button onClick={()=>{if(!form.partnerId){alert("거래처 선택");return;}setPreview({data:{...form,...totals,creditAmt:form.creditAmt||totals.grandTotal},partner:partners.find(p=>p.id===form.partnerId)});}} style={{...S.btn,background:"#455a64"}}><Eye size={14}/> 미리보기</button>
+          <button onClick={handleSubmit} style={S.btn}><Check size={14}/> {editId?"수정":"발행"}</button>
+        </div>
+      </div>
+      {preview&&<PrintModal title="세금계산서" onClose={()=>setPreview(null)}><TaxInvoicePreview inv={preview.data} partner={preview.partner} myBiz={myBiz}/></PrintModal>}
+    </div>
+  );
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e"}}>세금계산서</h2>
+        <button onClick={()=>setMode("form")} style={S.btn}><Plus size={14}/> 새 세금계산서</button>
+      </div>
+      <div style={{...S.card,overflow:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["번호","작성일","거래처","합계","상태","관리"].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead>
+          <tbody>{taxInvoices.map(t=>{const pt=partners.find(p=>p.id===t.partnerId);return(
+            <tr key={t.id} style={{borderBottom:"1px solid #f0f0f0"}}>
+              <td style={{padding:"8px 6px",color:"#888"}}>{t.id}</td><td style={{padding:"8px 6px"}}>{t.issueDate}</td>
+              <td style={{padding:"8px 6px",fontWeight:500}}>{pt?.name||""}</td>
+              <td style={{padding:"8px 6px",textAlign:"right",fontWeight:700}}>{fmt(t.grandTotal)}</td>
+              <td style={{padding:"8px 6px",textAlign:"center"}}><span style={{padding:"2px 6px",borderRadius:4,fontSize:10,background:"#e3f2fd",color:"#1565c0"}}>{t.status}</span></td>
+              <td style={{padding:"8px 6px",textAlign:"center",whiteSpace:"nowrap"}}>
+                <button onClick={()=>setPreview({data:t,partner:pt})} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Printer size={13} color="#1565c0"/></button>
+                <button onClick={()=>{setForm({issueDate:t.issueDate,partnerId:t.partnerId,supplyDate:t.supplyDate,items:t.items,note:t.note,cashAmt:t.cashAmt,chkAmt:t.chkAmt,promAmt:t.promAmt,creditAmt:t.creditAmt});setEditId(t.id);setMode("form");}} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Edit3 size={13} color="#666"/></button>
+                <button onClick={()=>{if(confirm("삭제?"))setTaxInvoices(p=>p.filter(x=>x.id!==t.id));}} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Trash2 size={13} color="#d32f2f"/></button>
+              </td>
+            </tr>
+          );})}
+          </tbody>
+        </table>
+        {!taxInvoices.length&&<div style={{padding:40,textAlign:"center",color:"#999"}}>세금계산서가 없습니다.</div>}
+      </div>
+      {preview&&<PrintModal title="세금계산서" onClose={()=>setPreview(null)}><TaxInvoicePreview inv={preview.data} partner={preview.partner} myBiz={myBiz}/></PrintModal>}
+    </div>
+  );
+};
+
+const Dashboard = ({vouchers,accounts,statements,taxInvoices}) => {
+  const stats=useMemo(()=>{let rev=0,exp=0;vouchers.forEach(v=>{const ca=accounts.find(a=>a.code===v.creditAccount);const da=accounts.find(a=>a.code===v.debitAccount);if(ca?.category==="수익")rev+=v.creditAmount;if(da?.category==="비용")exp+=v.debitAmount;});return{rev,exp,profit:rev-exp,stmtTotal:statements.reduce((s,st)=>s+st.grandTotal,0),taxTotal:taxInvoices.reduce((s,t)=>s+t.grandTotal,0),stmtCount:statements.length,taxCount:taxInvoices.length};},[vouchers,accounts,statements,taxInvoices]);
+  const Card=({title,value,sub,icon:I,color})=>(<div style={{...S.card,padding:"14px 16px",flex:1,minWidth:150}}><div style={{display:"flex",justifyContent:"space-between"}}><div><div style={{fontSize:11,color:"#666",marginBottom:4}}>{title}</div><div style={{fontSize:18,fontWeight:700,color:"#1a1a2e"}}>{value}</div>{sub&&<div style={{fontSize:11,color,marginTop:2}}>{sub}</div>}</div><div style={{width:34,height:34,borderRadius:8,background:color+"18",display:"flex",alignItems:"center",justifyContent:"center"}}>{I&&<I size={16} color={color}/>}</div></div></div>);
+  return(<div><h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>대시보드</h2><div style={{display:"flex",gap:10,marginBottom:12,flexWrap:"wrap"}}><Card title="총 수익" value={fmtW(stats.rev)} icon={TrendingUp} color="#2e7d32"/><Card title="총 비용" value={fmtW(stats.exp)} icon={TrendingDown} color="#c62828"/><Card title="당기순이익" value={fmtW(stats.profit)} icon={DollarSign} color={stats.profit>=0?"#1565c0":"#c62828"} sub={stats.profit>=0?"흑자":"적자"}/></div><div style={{display:"flex",gap:10,flexWrap:"wrap"}}><Card title="거래명세서" value={stats.stmtCount+"건"} sub={fmtW(stats.stmtTotal)} icon={Receipt} color="#6a1b9a"/><Card title="세금계산서" value={stats.taxCount+"건"} sub={fmtW(stats.taxTotal)} icon={FileCheck} color="#e65100"/><Card title="전표" value={vouchers.length+"건"} icon={FileText} color="#00695c"/></div></div>);
+};
+
+const VoucherEntry = ({vouchers,setVouchers,accounts,partners}) => {
+  const today=new Date().toISOString().slice(0,10);
+  const empty={date:today,type:"출금",description:"",debitAccount:"",creditAccount:"",debitAmount:"",partner:"",memo:""};
+  const [form,setForm]=useState(empty);const [editId,setEditId]=useState(null);
+  const submit=()=>{if(!form.debitAccount||!form.creditAccount||!form.debitAmount){alert("필수항목을 입력하세요.");return;}const amt=Number(form.debitAmount);if(editId){setVouchers(p=>p.map(v=>v.id===editId?{...v,...form,debitAmount:amt,creditAmount:amt}:v));setEditId(null);}else{setVouchers(p=>[...p,{...form,id:Math.max(0,...p.map(v=>v.id))+1,debitAmount:amt,creditAmount:amt}]);}setForm(empty);};
+  return(<div><h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>전표입력</h2>
+    <div style={{...S.card,padding:16,marginBottom:12}}>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
+        <div style={{flex:"0 0 120px"}}><label style={S.label}>일자</label><input type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})} style={S.input}/></div>
+        <div style={{flex:"0 0 80px"}}><label style={S.label}>유형</label><select value={form.type} onChange={e=>setForm({...form,type:e.target.value})} style={S.select}><option>입금</option><option>출금</option><option>대체</option></select></div>
+        <div style={{flex:1,minWidth:130}}><label style={S.label}>적요</label><input value={form.description} onChange={e=>setForm({...form,description:e.target.value})} style={S.input}/></div>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end"}}>
+        <div style={{flex:1,minWidth:140}}><label style={S.label}>차변</label><select value={form.debitAccount} onChange={e=>setForm({...form,debitAccount:e.target.value})} style={S.select}><option value="">선택</option>{accounts.map(a=><option key={a.code} value={a.code}>[{a.code}] {a.name}</option>)}</select></div>
+        <div style={{flex:1,minWidth:140}}><label style={S.label}>대변</label><select value={form.creditAccount} onChange={e=>setForm({...form,creditAccount:e.target.value})} style={S.select}><option value="">선택</option>{accounts.map(a=><option key={a.code} value={a.code}>[{a.code}] {a.name}</option>)}</select></div>
+        <div style={{flex:"0 0 110px"}}><label style={S.label}>금액</label><input type="number" value={form.debitAmount} onChange={e=>setForm({...form,debitAmount:e.target.value})} style={S.input}/></div>
+        <button onClick={submit} style={S.btn}>{editId?<><Check size={14}/> 수정</>:<><Plus size={14}/> 등록</>}</button>
+      </div>
+    </div>
+    <div style={{...S.card,overflow:"auto"}}>
+      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+        <thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["No","일자","유형","적요","차변","대변","금액",""].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead>
+        <tbody>{[...vouchers].sort((a,b)=>a.date.localeCompare(b.date)).map(v=>{const da=accounts.find(a=>a.code===v.debitAccount);const ca=accounts.find(a=>a.code===v.creditAccount);return(<tr key={v.id} style={{borderBottom:"1px solid #f0f0f0"}}><td style={{padding:8,color:"#999"}}>{v.id}</td><td style={{padding:8}}>{v.date}</td><td style={{padding:8,textAlign:"center"}}><span style={{padding:"2px 6px",borderRadius:4,fontSize:10,background:v.type==="입금"?"#e8f5e9":"#fce4ec",color:v.type==="입금"?"#2e7d32":"#c62828"}}>{v.type}</span></td><td style={{padding:8,fontWeight:500}}>{v.description}</td><td style={{padding:8,color:"#1565c0"}}>{da?.name||""}</td><td style={{padding:8,color:"#c62828"}}>{ca?.name||""}</td><td style={{padding:8,textAlign:"right",fontWeight:600}}>{fmt(v.debitAmount)}</td><td style={{padding:8,textAlign:"center"}}><button onClick={()=>{setForm({...v,debitAmount:v.debitAmount+""});setEditId(v.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Edit3 size={12} color="#666"/></button><button onClick={()=>{if(confirm("삭제?"))setVouchers(p=>p.filter(x=>x.id!==v.id));}} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Trash2 size={12} color="#d32f2f"/></button></td></tr>);})}</tbody>
+      </table>
+    </div>
+  </div>);
+};
+
+const Journal = ({vouchers,accounts}) => {
+  const sorted=[...vouchers].sort((a,b)=>a.date.localeCompare(b.date));let tD=0,tC=0;sorted.forEach(v=>{tD+=v.debitAmount;tC+=v.creditAmount;});
+  return(<div><h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>분개장</h2><div style={{...S.card,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["일자","적요","차변 계정","차변","대변 계정","대변"].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead><tbody>{sorted.map(v=>{const da=accounts.find(a=>a.code===v.debitAccount);const ca=accounts.find(a=>a.code===v.creditAccount);return(<tr key={v.id} style={{borderBottom:"1px solid #f0f0f0"}}><td style={{padding:8}}>{v.date}</td><td style={{padding:8,fontWeight:500}}>{v.description}</td><td style={{padding:8,color:"#1565c0"}}>{da?`[${da.code}] ${da.name}`:""}</td><td style={{padding:8,textAlign:"right",fontWeight:600}}>{fmt(v.debitAmount)}</td><td style={{padding:8,color:"#c62828"}}>{ca?`[${ca.code}] ${ca.name}`:""}</td><td style={{padding:8,textAlign:"right",fontWeight:600}}>{fmt(v.creditAmount)}</td></tr>);})}</tbody><tfoot><tr style={{background:"#f0f4ff",borderTop:"2px solid #c5cae9",fontWeight:700}}><td colSpan={3} style={{padding:10,textAlign:"right"}}>합계</td><td style={{padding:10,textAlign:"right",color:"#1565c0"}}>{fmt(tD)}</td><td/><td style={{padding:10,textAlign:"right",color:"#c62828"}}>{fmt(tC)}</td></tr></tfoot></table></div></div>);
+};
+
+const Ledger = ({vouchers,accounts}) => {
+  const [sel,setSel]=useState("");const used=new Set();vouchers.forEach(v=>{used.add(v.debitAccount);used.add(v.creditAccount);});const active=accounts.filter(a=>used.has(a.code));const info=accounts.find(a=>a.code===sel);
+  const txns=sel?vouchers.filter(v=>v.debitAccount===sel||v.creditAccount===sel).sort((a,b)=>a.date.localeCompare(b.date)):[];let bal=0;
+  const rows=txns.map(v=>{const d=v.debitAccount===sel?v.debitAmount:0,cr=v.creditAccount===sel?v.creditAmount:0;bal+=info?.type==="debit"?d-cr:cr-d;const cc=v.debitAccount===sel?v.creditAccount:v.debitAccount;return{...v,d,cr,bal,cn:accounts.find(a=>a.code===cc)?.name||cc};});
+  return(<div><h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>총계정원장</h2><select value={sel} onChange={e=>setSel(e.target.value)} style={{...S.select,width:"100%",maxWidth:280,marginBottom:14}}><option value="">계정과목 선택...</option>{active.map(a=><option key={a.code} value={a.code}>[{a.code}] {a.name}</option>)}</select>{sel&&info?<div style={{...S.card,overflow:"auto"}}><div style={{padding:"10px 14px",background:"#f0f4ff",fontWeight:700,color:"#1a237e"}}>[{info.code}] {info.name}</div><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["일자","적요","상대계정","차변","대변","잔액"].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead><tbody>{rows.map(r=><tr key={r.id} style={{borderBottom:"1px solid #f0f0f0"}}><td style={{padding:8}}>{r.date}</td><td style={{padding:8,fontWeight:500}}>{r.description}</td><td style={{padding:8,color:"#666"}}>{r.cn}</td><td style={{padding:8,textAlign:"right",color:r.d?"#1565c0":"#ccc"}}>{r.d?fmt(r.d):"-"}</td><td style={{padding:8,textAlign:"right",color:r.cr?"#c62828":"#ccc"}}>{r.cr?fmt(r.cr):"-"}</td><td style={{padding:8,textAlign:"right",fontWeight:700}}>{fmt(r.bal)}</td></tr>)}</tbody></table></div>:<div style={{...S.card,padding:50,textAlign:"center",color:"#999"}}>계정과목을 선택하세요.</div>}</div>);
+};
+
+const TrialBalance = ({vouchers,accounts}) => {
+  const data=useMemo(()=>{const b={};vouchers.forEach(v=>{if(!b[v.debitAccount])b[v.debitAccount]={d:0,c:0};if(!b[v.creditAccount])b[v.creditAccount]={d:0,c:0};b[v.debitAccount].d+=v.debitAmount;b[v.creditAccount].c+=v.creditAmount;});const rows=[];let tD=0,tC=0,tDB=0,tCB=0;accounts.forEach(a=>{const x=b[a.code];if(!x)return;const net=x.d-x.c;const db=net>0?net:0,cb=net<0?-net:0;tD+=x.d;tC+=x.c;tDB+=db;tCB+=cb;rows.push({...a,td:x.d,tc:x.c,db,cb});});return{rows,tD,tC,tDB,tCB};},[vouchers,accounts]);
+  return(<div><h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>합계잔액시산표</h2><div style={{...S.card,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["코드","계정과목","분류","합계차변","합계대변","잔액차변","잔액대변"].map((t,i)=><th key={i} style={{...S.th,textAlign:i>2?"right":"left"}}>{t}</th>)}</tr></thead><tbody>{data.rows.map(r=><tr key={r.code} style={{borderBottom:"1px solid #f0f0f0"}}><td style={{padding:8,color:"#888"}}>{r.code}</td><td style={{padding:8,fontWeight:500}}>{r.name}</td><td style={{padding:8,fontSize:11,color:"#888"}}>{r.category}</td><td style={{padding:8,textAlign:"right"}}>{r.td?fmt(r.td):"-"}</td><td style={{padding:8,textAlign:"right"}}>{r.tc?fmt(r.tc):"-"}</td><td style={{padding:8,textAlign:"right",fontWeight:600,color:"#1565c0"}}>{r.db?fmt(r.db):"-"}</td><td style={{padding:8,textAlign:"right",fontWeight:600,color:"#c62828"}}>{r.cb?fmt(r.cb):"-"}</td></tr>)}</tbody><tfoot><tr style={{background:"#f0f4ff",borderTop:"2px solid #c5cae9",fontWeight:700}}><td colSpan={3} style={{padding:10,textAlign:"right"}}>합계</td><td style={{padding:10,textAlign:"right"}}>{fmt(data.tD)}</td><td style={{padding:10,textAlign:"right"}}>{fmt(data.tC)}</td><td style={{padding:10,textAlign:"right",color:"#1565c0"}}>{fmt(data.tDB)}</td><td style={{padding:10,textAlign:"right",color:"#c62828"}}>{fmt(data.tCB)}</td></tr></tfoot></table></div></div>);
+};
+
+const BalanceSheet = ({vouchers,accounts}) => {
+  const data=useMemo(()=>{const b={};vouchers.forEach(v=>{if(!b[v.debitAccount])b[v.debitAccount]=0;if(!b[v.creditAccount])b[v.creditAccount]=0;b[v.debitAccount]+=v.debitAmount;b[v.creditAccount]-=v.creditAmount;});let ni=0;accounts.forEach(a=>{const bal=b[a.code]||0;if(a.category==="수익")ni+=Math.abs(bal);if(a.category==="비용")ni-=Math.abs(bal);});const secs={유동자산:[],비유동자산:[],유동부채:[],비유동부채:[],자본금:[],이익잉여금:[]};const tots={유동자산:0,비유동자산:0,유동부채:0,비유동부채:0,자본금:0,이익잉여금:0};accounts.forEach(a=>{const bal=b[a.code]||0;if(!secs[a.subcategory])return;const d=a.category==="자산"?bal:-bal;if(!d)return;secs[a.subcategory].push({...a,balance:d});tots[a.subcategory]+=d;});const tA=tots.유동자산+tots.비유동자산,tL=tots.유동부채+tots.비유동부채,tC=tots.자본금+tots.이익잉여금+ni;return{secs,tots,tA,tL,tC,ni};},[vouchers,accounts]);
+  const Sec=({label,items,total})=>(<><tr style={{background:"#f8f9fa"}}><td colSpan={2} style={{padding:"7px 12px",fontWeight:700,color:"#1a237e",fontSize:13}}>{label}</td></tr>{items.map(it=><tr key={it.code} style={{borderBottom:"1px solid #f5f5f5"}}><td style={{padding:"5px 12px 5px 24px",fontSize:12.5}}>{it.name}</td><td style={{padding:"5px 12px",textAlign:"right"}}>{fmt(it.balance)}</td></tr>)}<tr style={{borderBottom:"2px solid #e0e0e0"}}><td style={{padding:"6px 12px",fontWeight:600}}>{label} 소계</td><td style={{padding:"6px 12px",textAlign:"right",fontWeight:700}}>{fmt(total)}</td></tr></>);
+  return(<div><h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>재무상태표</h2><div style={{display:"flex",gap:12,flexWrap:"wrap"}}><div style={{...S.card,flex:1,minWidth:280,overflow:"hidden"}}><div style={{background:"#1a237e",color:"#fff",padding:"10px 14px",fontWeight:700}}>자산</div><table style={{width:"100%",borderCollapse:"collapse"}}><tbody><Sec label="유동자산" items={data.secs.유동자산} total={data.tots.유동자산}/><Sec label="비유동자산" items={data.secs.비유동자산} total={data.tots.비유동자산}/></tbody><tfoot><tr style={{background:"#e8eaf6",borderTop:"3px solid #1a237e"}}><td style={{padding:"10px 14px",fontWeight:800,color:"#1a237e"}}>자산 총계</td><td style={{padding:"10px 14px",textAlign:"right",fontWeight:800,fontSize:14,color:"#1a237e"}}>{fmt(data.tA)}</td></tr></tfoot></table></div><div style={{...S.card,flex:1,minWidth:280,overflow:"hidden"}}><div style={{background:"#b71c1c",color:"#fff",padding:"10px 14px",fontWeight:700}}>부채 및 자본</div><table style={{width:"100%",borderCollapse:"collapse"}}><tbody><Sec label="유동부채" items={data.secs.유동부채} total={data.tots.유동부채}/><Sec label="자본금" items={data.secs.자본금} total={data.tots.자본금}/><Sec label="이익잉여금" items={[...data.secs.이익잉여금,{code:"NI",name:"당기순이익",balance:data.ni}]} total={data.tots.이익잉여금+data.ni}/></tbody><tfoot><tr style={{background:"#e8eaf6",borderTop:"3px solid #1a237e"}}><td style={{padding:"10px 14px",fontWeight:800,color:"#1a237e"}}>부채+자본</td><td style={{padding:"10px 14px",textAlign:"right",fontWeight:800,fontSize:14,color:"#1a237e"}}>{fmt(data.tL+data.tC)}</td></tr></tfoot></table></div></div><div style={{marginTop:12,padding:"10px 18px",borderRadius:8,textAlign:"center",fontSize:13,fontWeight:600,background:Math.abs(data.tA-(data.tL+data.tC))<1?"#e8f5e9":"#fce4ec",color:Math.abs(data.tA-(data.tL+data.tC))<1?"#2e7d32":"#c62828"}}>자산({fmtW(data.tA)}) = 부채({fmtW(data.tL)}) + 자본({fmtW(data.tC)}) {Math.abs(data.tA-(data.tL+data.tC))<1?" ✓":" ✗"}</div></div>);
+};
+
+const IncomeStatement = ({vouchers,accounts}) => {
+  const data=useMemo(()=>{const b={};vouchers.forEach(v=>{if(!b[v.debitAccount])b[v.debitAccount]=0;if(!b[v.creditAccount])b[v.creditAccount]=0;b[v.debitAccount]+=v.debitAmount;b[v.creditAccount]-=v.creditAmount;});const secs={매출:[],매출원가:[],판매비와관리비:[],영업외수익:[],영업외비용:[],법인세:[]};const tots={매출:0,매출원가:0,판매비와관리비:0,영업외수익:0,영업외비용:0,법인세:0};accounts.forEach(a=>{const bal=b[a.code]||0;if(!bal||!secs[a.subcategory])return;const d=Math.abs(bal);secs[a.subcategory].push({...a,balance:d});tots[a.subcategory]+=d;});const gp=tots.매출-tots.매출원가,oi=gp-tots.판매비와관리비,ni=oi+tots.영업외수익-tots.영업외비용-tots.법인세;return{secs,tots,gp,oi,ni};},[vouchers,accounts]);
+  const R=({label,amount,bold,color,bg})=>(<tr style={{background:bg||"transparent",borderBottom:"1px solid #f0f0f0"}}><td style={{padding:bold?"10px 12px":"6px 12px 6px 24px",fontWeight:bold?700:400,color:color||"#333",fontSize:bold?13:12.5}}>{label}</td><td style={{padding:bold?"10px 12px":"6px 12px",textAlign:"right",fontWeight:bold?700:400,color:color||"#333"}}>{fmt(amount)}</td></tr>);
+  return(<div><h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>손익계산서</h2><div style={{...S.card,maxWidth:580,overflow:"hidden"}}><div style={{background:"#1a237e",color:"#fff",padding:"10px 14px",fontWeight:700}}>손익계산서</div><table style={{width:"100%",borderCollapse:"collapse"}}><tbody><R label="I. 매출액" amount={data.tots.매출} bold bg="#f8f9fa"/>{data.secs.매출.map(it=><R key={it.code} label={it.name} amount={it.balance}/>)}<R label="매출총이익" amount={data.gp} bold color="#2e7d32" bg="#e8f5e9"/><R label="II. 판매비와관리비" amount={data.tots.판매비와관리비} bold bg="#f8f9fa"/>{data.secs.판매비와관리비.map(it=><R key={it.code} label={it.name} amount={it.balance}/>)}<R label="영업이익" amount={data.oi} bold color="#1565c0" bg="#e3f2fd"/></tbody><tfoot><tr style={{background:data.ni>=0?"#e8f5e9":"#fce4ec",borderTop:"3px solid #1a237e"}}><td style={{padding:"12px 14px",fontWeight:800,fontSize:15,color:data.ni>=0?"#2e7d32":"#c62828"}}>당기순이익</td><td style={{padding:"12px 14px",textAlign:"right",fontWeight:800,fontSize:15,color:data.ni>=0?"#2e7d32":"#c62828"}}>{fmtW(data.ni)}</td></tr></tfoot></table></div></div>);
+};
+
+const PARTNER_COLS = [
+  {label:"거래처명*",key:"name",w:160},
+  {label:"사업자번호",key:"bizNo",w:130},
+  {label:"대표자",key:"ceo",w:80},
+  {label:"주소",key:"addr",w:200},
+  {label:"전화",key:"tel",w:120},
+  {label:"팩스",key:"fax",w:120},
+  {label:"이메일",key:"email",w:150},
+  {label:"업태",key:"업태",w:100},
+  {label:"종목",key:"종목",w:100},
+  {label:"주민/법인번호",key:"regNo",w:140},
+  {label:"담당자",key:"manager",w:90},
+  {label:"담당자전화",key:"managerTel",w:120}
+];
+const PARTNER_XLS_HEADERS = ["거래처명","사업자번호","대표자","주소","전화","팩스","이메일","업태","종목","주민/법인번호","담당자","담당자전화","유형(매출처/매입처/겸용)"];
+const PARTNER_KEY_MAP = {"거래처명":"name","사업자번호":"bizNo","대표자":"ceo","주소":"addr","전화":"tel","팩스":"fax","이메일":"email","업태":"업태","종목":"종목","주민/법인번호":"regNo","담당자":"manager","담당자전화":"managerTel","유형(매출처/매입처/겸용)":"type"};
+
+const Partners = ({partners,setPartners}) => {
+  const empty={id:"",name:"",bizNo:"",ceo:"",addr:"",tel:"",fax:"",email:"",업태:"",종목:"",type:"매출처",regNo:"",manager:"",managerTel:""};
+  const [form,setForm]=useState(empty);
+  const [editId,setEditId]=useState(null);
+  const [importModal,setImportModal]=useState(false);
+  const [importData,setImportData]=useState([]);
+  const [importError,setImportError]=useState("");
+  const [importMode,setImportMode]=useState("append");
+  const fileRef=useRef(null);
+
+  const submit=()=>{
+    if(!form.name){alert("거래처명을 입력하세요.");return;}
+    if(editId){setPartners(p=>p.map(x=>x.id===editId?{...form}:x));setEditId(null);}
+    else{setPartners(p=>[...p,{...form,id:"P"+String(Math.max(0,...p.map(x=>parseInt(x.id.replace("P",""))||0))+1).padStart(3,"0")}]);}
+    setForm(empty);
+  };
+
+  const nextId=(existingList)=>"P"+String(Math.max(0,...existingList.map(x=>parseInt(x.id.replace("P",""))||0))+1).padStart(3,"0");
+
+  // 엑셀 양식 다운로드
+  const downloadTemplate=()=>{
+    if(!window.XLSX){alert("XLSX 라이브러리가 로드되지 않았습니다.");return;}
+    const ws=XLSX.utils.aoa_to_sheet([PARTNER_XLS_HEADERS,["(주)예시회사","123-45-67890","홍길동","서울시 강남구","02-1234-5678","","info@example.com","서비스업","소프트웨어","","김담당","010-9876-5432","매출처"]]);
+    ws['!cols']=PARTNER_XLS_HEADERS.map(h=>({wch:Math.max(h.length*2,14)}));
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"거래처목록");
+    XLSX.writeFile(wb,"거래처_입력양식.xlsx");
+  };
+
+  // 현재 거래처 엑셀 내보내기
+  const exportExcel=()=>{
+    if(!window.XLSX){alert("XLSX 라이브러리가 로드되지 않았습니다.");return;}
+    const rows=[PARTNER_XLS_HEADERS,...partners.map(p=>[p.name||"",p.bizNo||"",p.ceo||"",p.addr||"",p.tel||"",p.fax||"",p.email||"",p.업태||"",p.종목||"",p.regNo||"",p.manager||"",p.managerTel||"",p.type||"매출처"])];
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=PARTNER_XLS_HEADERS.map(h=>({wch:Math.max(h.length*2,14)}));
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"거래처목록");
+    XLSX.writeFile(wb,"거래처목록_내보내기.xlsx");
+  };
+
+  // 엑셀 파일 읽기
+  const handleFileChange=(e)=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    if(!window.XLSX){alert("XLSX 라이브러리가 로드되지 않았습니다.");return;}
+    const reader=new FileReader();
+    reader.onload=(evt)=>{
+      try{
+        const wb=XLSX.read(evt.target.result,{type:"binary"});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+        if(rows.length<2){setImportError("데이터가 없습니다. 헤더 행 아래에 데이터를 입력해주세요.");setImportData([]);return;}
+        const headers=rows[0].map(h=>String(h).trim());
+        const nameIdx=headers.findIndex(h=>h==="거래처명"||h==="거래처명*");
+        if(nameIdx<0){setImportError("'거래처명' 열을 찾을 수 없습니다. 양식 파일을 사용해주세요.");setImportData([]);return;}
+        const parsed=[];
+        const errs=[];
+        rows.slice(1).forEach((row,ri)=>{
+          if(row.every(c=>c===""||c===null||c===undefined))return;
+          const obj={};
+          headers.forEach((h,i)=>{const k=PARTNER_KEY_MAP[h];if(k)obj[k]=String(row[i]||"").trim();});
+          if(!obj.name){errs.push(`${ri+2}행: 거래처명이 비어있습니다.`);return;}
+          if(!["매출처","매입처","겸용"].includes(obj.type))obj.type="매출처";
+          parsed.push(obj);
+        });
+        if(errs.length>0){setImportError(errs.join("\n"));}else{setImportError("");}
+        setImportData(parsed);
+        setImportModal(true);
+      }catch(err){setImportError("파일 읽기 오류: "+err.message);setImportData([]);setImportModal(true);}
+    };
+    reader.readAsBinaryString(file);
+    e.target.value="";
+  };
+
+  // 가져오기 확정
+  const confirmImport=()=>{
+    if(importData.length===0)return;
+    if(importMode==="replace"){
+      const withIds=importData.map((obj,i)=>({...obj,id:"P"+String(i+1).padStart(3,"0")}));
+      setPartners(withIds);
+    }else{
+      setPartners(prev=>{
+        let cur=[...prev];
+        importData.forEach(obj=>{
+          const dup=cur.find(x=>obj.bizNo&&x.bizNo===obj.bizNo);
+          if(dup){cur=cur.map(x=>x.id===dup.id?{...dup,...obj,id:dup.id}:x);}
+          else{cur=[...cur,{...obj,id:nextId(cur)}];}
+        });
+        return cur;
+      });
+    }
+    setImportModal(false);
+    setImportData([]);
+    setImportError("");
+  };
+
+  return(
+  <div>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
+      <h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e"}}>거래처관리</h2>
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={downloadTemplate} style={{...S.btn,background:"#546e7a",display:"flex",alignItems:"center",gap:5,fontSize:12}}>
+          <FileSpreadsheet size={14}/>양식 다운로드
+        </button>
+        <button onClick={()=>fileRef.current&&fileRef.current.click()} style={{...S.btn,background:"#2e7d32",display:"flex",alignItems:"center",gap:5,fontSize:12}}>
+          <Upload size={14}/>엑셀 가져오기
+        </button>
+        <button onClick={exportExcel} style={{...S.btn,background:"#1565c0",display:"flex",alignItems:"center",gap:5,fontSize:12}}>
+          <Download size={14}/>엑셀 내보내기
+        </button>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFileChange} style={{display:"none"}}/>
+      </div>
+    </div>
+
+    {/* 직접 입력 폼 */}
+    <div style={{...S.card,padding:16,marginBottom:12}}>
+      <div style={{fontSize:12,fontWeight:600,color:"#555",marginBottom:8}}>직접 입력</div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end"}}>
+        {PARTNER_COLS.map(({label,key,w})=>(
+          <div key={key} style={{flex:`0 0 ${w}px`}}>
+            <label style={S.label}>{label}</label>
+            <input value={form[key]||""} onChange={e=>setForm({...form,[key]:e.target.value})} style={S.input}/>
+          </div>
+        ))}
+        <div style={{flex:"0 0 85px"}}>
+          <label style={S.label}>유형</label>
+          <select value={form.type} onChange={e=>setForm({...form,type:e.target.value})} style={S.select}>
+            <option>매출처</option><option>매입처</option><option>겸용</option>
+          </select>
+        </div>
+        <button onClick={submit} style={S.btn}>{editId?<><Check size={14}/>수정</>:<><Plus size={14}/>등록</>}</button>
+        {editId&&<button onClick={()=>{setForm(empty);setEditId(null);}} style={{...S.btn,background:"#888"}}>취소</button>}
+      </div>
+    </div>
+
+    {/* 거래처 목록 테이블 */}
+    <div style={{...S.card,overflow:"auto"}}>
+      <div style={{padding:"8px 12px",fontSize:12,color:"#888",borderBottom:"1px solid #f0f0f0"}}>
+        총 {partners.length}개 거래처
+      </div>
+      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+        <thead>
+          <tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>
+            {["코드","거래처명","사업자번호","대표자","주소","전화","팩스","이메일","업태","종목","주민/법인번호","담당자","담당자전화","유형",""].map((t,i)=>(
+              <th key={i} style={S.th}>{t}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {partners.map(p=>(
+            <tr key={p.id} style={{borderBottom:"1px solid #f0f0f0"}}>
+              <td style={{padding:8,color:"#888",whiteSpace:"nowrap"}}>{p.id}</td>
+              <td style={{padding:8,fontWeight:500,whiteSpace:"nowrap"}}>{p.name}</td>
+              <td style={{padding:8,whiteSpace:"nowrap"}}>{p.bizNo}</td>
+              <td style={{padding:8,whiteSpace:"nowrap"}}>{p.ceo}</td>
+              <td style={{padding:8,whiteSpace:"nowrap"}}>{p.addr}</td>
+              <td style={{padding:8,whiteSpace:"nowrap"}}>{p.tel}</td>
+              <td style={{padding:8,whiteSpace:"nowrap"}}>{p.fax||""}</td>
+              <td style={{padding:8,whiteSpace:"nowrap"}}>{p.email}</td>
+              <td style={{padding:8,whiteSpace:"nowrap"}}>{p.업태}</td>
+              <td style={{padding:8,whiteSpace:"nowrap"}}>{p.종목}</td>
+              <td style={{padding:8,whiteSpace:"nowrap"}}>{p.regNo||""}</td>
+              <td style={{padding:8,whiteSpace:"nowrap"}}>{p.manager||""}</td>
+              <td style={{padding:8,whiteSpace:"nowrap"}}>{p.managerTel||""}</td>
+              <td style={{padding:8,textAlign:"center",whiteSpace:"nowrap"}}>
+                <span style={{padding:"2px 7px",borderRadius:4,fontSize:10,background:p.type==="매출처"?"#e3f2fd":p.type==="겸용"?"#f3e5f5":"#fce4ec",color:p.type==="매출처"?"#1565c0":p.type==="겸용"?"#6a1b9a":"#c62828"}}>{p.type}</span>
+              </td>
+              <td style={{padding:8,textAlign:"center",whiteSpace:"nowrap"}}>
+                <button onClick={()=>{setForm({...p,fax:p.fax||"",regNo:p.regNo||"",manager:p.manager||"",managerTel:p.managerTel||""});setEditId(p.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Edit3 size={12} color="#666"/></button>
+                <button onClick={()=>{if(confirm("삭제하시겠습니까?"))setPartners(prev=>prev.filter(x=>x.id!==p.id));}} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Trash2 size={12} color="#d32f2f"/></button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    {/* 엑셀 가져오기 모달 */}
+    {importModal&&(
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"#fff",borderRadius:12,padding:24,width:640,maxWidth:"95vw",maxHeight:"80vh",overflowY:"auto",boxShadow:"0 8px 32px rgba(0,0,0,0.2)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <h3 style={{fontSize:16,fontWeight:700,color:"#1a1a2e"}}>엑셀 가져오기 미리보기</h3>
+            <button onClick={()=>{setImportModal(false);setImportData([]);setImportError("");}} style={{background:"none",border:"none",cursor:"pointer"}}><X size={18}/></button>
+          </div>
+
+          {importError&&(
+            <div style={{background:"#fff3e0",border:"1px solid #ff9800",borderRadius:6,padding:10,marginBottom:12,fontSize:12,color:"#e65100",whiteSpace:"pre-line",display:"flex",gap:6}}>
+              <AlertCircle size={14} style={{flexShrink:0,marginTop:1}}/>
+              {importError}
+            </div>
+          )}
+
+          {importData.length>0&&(
+            <>
+              <div style={{background:"#e8f5e9",border:"1px solid #4caf50",borderRadius:6,padding:10,marginBottom:12,fontSize:12,color:"#2e7d32"}}>
+                ✓ 총 <strong>{importData.length}개</strong> 거래처를 인식했습니다.
+              </div>
+
+              <div style={{marginBottom:12}}>
+                <label style={{fontSize:12,fontWeight:600,color:"#555",marginBottom:4,display:"block"}}>가져오기 방식</label>
+                <div style={{display:"flex",gap:12}}>
+                  <label style={{display:"flex",alignItems:"center",gap:5,fontSize:12,cursor:"pointer"}}>
+                    <input type="radio" value="append" checked={importMode==="append"} onChange={()=>setImportMode("append")}/>
+                    추가 (기존 거래처 유지, 사업자번호 동일 시 업데이트)
+                  </label>
+                  <label style={{display:"flex",alignItems:"center",gap:5,fontSize:12,cursor:"pointer"}}>
+                    <input type="radio" value="replace" checked={importMode==="replace"} onChange={()=>setImportMode("replace")}/>
+                    전체 교체 (기존 거래처 모두 삭제)
+                  </label>
+                </div>
+              </div>
+
+              <div style={{overflowX:"auto",marginBottom:16,border:"1px solid #e8eaed",borderRadius:6}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                  <thead>
+                    <tr style={{background:"#f8f9fa"}}>
+                      {["거래처명","사업자번호","대표자","전화","이메일","유형"].map((h,i)=>(
+                        <th key={i} style={{...S.th,fontSize:11}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importData.slice(0,20).map((p,i)=>(
+                      <tr key={i} style={{borderBottom:"1px solid #f0f0f0"}}>
+                        <td style={{padding:"5px 8px",fontWeight:500}}>{p.name}</td>
+                        <td style={{padding:"5px 8px"}}>{p.bizNo}</td>
+                        <td style={{padding:"5px 8px"}}>{p.ceo}</td>
+                        <td style={{padding:"5px 8px"}}>{p.tel}</td>
+                        <td style={{padding:"5px 8px"}}>{p.email}</td>
+                        <td style={{padding:"5px 8px",textAlign:"center"}}>
+                          <span style={{padding:"1px 6px",borderRadius:3,fontSize:10,background:p.type==="매출처"?"#e3f2fd":p.type==="겸용"?"#f3e5f5":"#fce4ec",color:p.type==="매출처"?"#1565c0":p.type==="겸용"?"#6a1b9a":"#c62828"}}>{p.type||"매출처"}</span>
+                        </td>
+                      </tr>
+                    ))}
+                    {importData.length>20&&<tr><td colSpan={6} style={{padding:"5px 8px",color:"#888",textAlign:"center",fontSize:11}}>... 외 {importData.length-20}개</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                <button onClick={()=>{setImportModal(false);setImportData([]);setImportError("");}} style={{...S.btn,background:"#888"}}>취소</button>
+                <button onClick={confirmImport} style={{...S.btn,background:"#2e7d32"}}><Check size={14}/>가져오기 확정</button>
+              </div>
+            </>
+          )}
+
+          {importData.length===0&&importError&&(
+            <div style={{display:"flex",justifyContent:"flex-end"}}>
+              <button onClick={()=>{setImportModal(false);setImportError("");}} style={{...S.btn,background:"#888"}}>닫기</button>
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+  </div>
+  );
+};
+
+const BACKUP_VERSION = "1.0";
+const BACKUP_KEYS = ["partners","vouchers","statements","taxInvoices","products","partnerPrices","myBiz","menuOrder","hiddenMenus"];
+const BACKUP_LABELS = {partners:"거래처",vouchers:"전표",statements:"거래명세서",taxInvoices:"세금계산서",products:"품목/단가",partnerPrices:"거래처별단가",myBiz:"회사정보",menuOrder:"메뉴순서",hiddenMenus:"숨긴메뉴"};
+
+// 자동 백업 유틸
+function doAutoBackup(allData){
+  const ts=new Date();
+  const tag=ts.getFullYear()+String(ts.getMonth()+1).padStart(2,"0")+String(ts.getDate()).padStart(2,"0")+"_자동";
+  const payload={__version:BACKUP_VERSION,__date:ts.toISOString(),__app:"LocalERP",__auto:true,...allData};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`localerp_백업_${tag}.json`;a.click();
+  return ts.toISOString();
+}
+function todayStr(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+
+const BackupRestore = ({partners,vouchers,statements,taxInvoices,products,partnerPrices,myBiz,menuOrder,hiddenMenus,setPartners,setVouchers,setStatements,setTaxInvoices,setProducts,setPartnerPrices,setMyBiz,setMenuOrder,setHiddenMenus,autoBackup,setAutoBackup,lastAutoBackup,setLastAutoBackup}) => {
+  const allData = {partners,vouchers,statements,taxInvoices,products,partnerPrices,myBiz,menuOrder,hiddenMenus};
+  const allSetters = {setPartners,setVouchers,setStatements,setTaxInvoices,setProducts,setPartnerPrices,setMyBiz,setMenuOrder,setHiddenMenus};
+  const [restoreModal,setRestoreModal]=useState(false);
+  const [restoreData,setRestoreData]=useState(null);
+  const [restoreError,setRestoreError]=useState("");
+  const [restoreKeys,setRestoreKeys]=useState([]);
+  const [doneMsg,setDoneMsg]=useState("");
+  const fileRef=useRef(null);
+
+  const now=()=>{const d=new Date();return d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0")+"_"+String(d.getHours()).padStart(2,"0")+String(d.getMinutes()).padStart(2,"0");};
+
+  // 백업 다운로드
+  const doBackup=()=>{
+    const payload={__version:BACKUP_VERSION,__date:new Date().toISOString(),__app:"LocalERP",...allData};
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`localerp_백업_${now()}.json`;a.click();
+    setDoneMsg("백업 파일이 다운로드됐습니다.");setTimeout(()=>setDoneMsg(""),3000);
+  };
+
+  // 파일 선택 → 파싱
+  const handleFile=(e)=>{
+    const file=e.target.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=(evt)=>{
+      try{
+        const obj=JSON.parse(evt.target.result);
+        if(!obj.__app||obj.__app!=="LocalERP"){setRestoreError("LocalERP 백업 파일이 아닙니다.");setRestoreData(null);setRestoreModal(true);return;}
+        const found=BACKUP_KEYS.filter(k=>obj[k]!==undefined);
+        if(found.length===0){setRestoreError("복원할 데이터가 없습니다.");setRestoreData(null);setRestoreModal(true);return;}
+        setRestoreError("");setRestoreData(obj);setRestoreKeys(found);setRestoreModal(true);
+      }catch(err){setRestoreError("파일 읽기 오류: "+err.message);setRestoreData(null);setRestoreModal(true);}
+    };
+    reader.readAsText(file,"utf-8");e.target.value="";
+  };
+
+  // 복원 확정
+  const doRestore=()=>{
+    restoreKeys.forEach(k=>{const setter=allSetters["set"+k.charAt(0).toUpperCase()+k.slice(1)];if(setter&&restoreData[k]!==undefined)setter(restoreData[k]);});
+    setRestoreModal(false);setRestoreData(null);setRestoreError("");
+    setDoneMsg("복원이 완료됐습니다.");setTimeout(()=>setDoneMsg(""),3000);
+  };
+
+  const dataSummary=[
+    {key:"partners",label:"거래처",count:partners?.length||0,icon:"👥"},
+    {key:"vouchers",label:"전표",count:vouchers?.length||0,icon:"📝"},
+    {key:"statements",label:"거래명세서",count:statements?.length||0,icon:"📋"},
+    {key:"taxInvoices",label:"세금계산서",count:taxInvoices?.length||0,icon:"🧾"},
+    {key:"products",label:"품목/단가",count:products?.length||0,icon:"📦"},
+  ];
+
+  return(
+  <div>
+    <h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>백업 / 복원</h2>
+
+    {doneMsg&&(
+      <div style={{background:"#e8f5e9",border:"1px solid #4caf50",borderRadius:8,padding:"10px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:8,color:"#2e7d32",fontSize:13,fontWeight:600}}>
+        <CheckCircle size={16}/>{doneMsg}
+      </div>
+    )}
+
+    {/* 현재 데이터 요약 */}
+    <div style={{...S.card,padding:16,marginBottom:16}}>
+      <div style={{fontSize:13,fontWeight:700,color:"#1a1a2e",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>
+        <Info size={15}/>현재 저장된 데이터
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
+        {dataSummary.map(d=>(
+          <div key={d.key} style={{background:"#f8f9fa",borderRadius:8,padding:"10px 18px",textAlign:"center",minWidth:100,border:"1px solid #e8eaed"}}>
+            <div style={{fontSize:20,marginBottom:4}}>{d.icon}</div>
+            <div style={{fontSize:11,color:"#888",marginBottom:2}}>{d.label}</div>
+            <div style={{fontSize:18,fontWeight:700,color:"#1a237e"}}>{d.count}</div>
+            <div style={{fontSize:10,color:"#aaa"}}>건</div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* 백업 */}
+    <div style={{...S.card,padding:20,marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
+        <div>
+          <div style={{fontSize:15,fontWeight:700,color:"#1a1a2e",marginBottom:6,display:"flex",alignItems:"center",gap:7}}>
+            <Save size={16} color="#1565c0"/>데이터 백업
+          </div>
+          <div style={{fontSize:12,color:"#666",lineHeight:1.6}}>
+            거래처, 전표, 거래명세서, 세금계산서, 품목, 단가, 회사정보 등<br/>
+            모든 데이터를 <strong>.json</strong> 파일로 저장합니다.
+          </div>
+        </div>
+        <button onClick={doBackup} style={{...S.btn,background:"#1565c0",display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap",padding:"10px 18px"}}>
+          <Download size={15}/>지금 백업하기
+        </button>
+      </div>
+    </div>
+
+    {/* 복원 */}
+    <div style={{...S.card,padding:20,marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
+        <div>
+          <div style={{fontSize:15,fontWeight:700,color:"#1a1a2e",marginBottom:6,display:"flex",alignItems:"center",gap:7}}>
+            <RotateCcw size={16} color="#2e7d32"/>데이터 복원
+          </div>
+          <div style={{fontSize:12,color:"#666",lineHeight:1.6}}>
+            이전에 백업한 <strong>.json</strong> 파일을 불러와 데이터를 복원합니다.<br/>
+            복원 항목을 선택할 수 있으며, 기존 데이터는 덮어씌워집니다.
+          </div>
+        </div>
+        <button onClick={()=>fileRef.current&&fileRef.current.click()} style={{...S.btn,background:"#2e7d32",display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap",padding:"10px 18px"}}>
+          <Upload size={15}/>백업 파일 불러오기
+        </button>
+        <input ref={fileRef} type="file" accept=".json" onChange={handleFile} style={{display:"none"}}/>
+      </div>
+    </div>
+
+    {/* 자동 백업 설정 */}
+    <div style={{...S.card,padding:20,marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
+        <div style={{flex:1}}>
+          <div style={{fontSize:15,fontWeight:700,color:"#1a1a2e",marginBottom:6,display:"flex",alignItems:"center",gap:7}}>
+            <Clock size={16} color="#6a1b9a"/>자동 백업 (매일 0시)
+          </div>
+          <div style={{fontSize:12,color:"#666",lineHeight:1.6,marginBottom:8}}>
+            앱이 열려 있을 때 매일 자정(00:00~00:05)에 자동으로 백업 파일을 다운로드합니다.
+          </div>
+          {lastAutoBackup&&(
+            <div style={{fontSize:11,color:"#888",display:"flex",alignItems:"center",gap:5}}>
+              <CheckCircle size={12} color="#4caf50"/>마지막 자동 백업: {new Date(lastAutoBackup).toLocaleString("ko-KR")}
+            </div>
+          )}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:12,color:autoBackup?"#2e7d32":"#999",fontWeight:600}}>{autoBackup?"켜짐":"꺼짐"}</span>
+          <button onClick={()=>setAutoBackup(!autoBackup)} style={{
+            width:48,height:26,borderRadius:13,border:"none",cursor:"pointer",position:"relative",
+            background:autoBackup?"#4caf50":"#ccc",transition:"background 0.2s"
+          }}>
+            <div style={{
+              width:22,height:22,borderRadius:11,background:"#fff",position:"absolute",top:2,
+              left:autoBackup?24:2,transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)"
+            }}/>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {/* 안내 */}
+    <div style={{background:"#fff8e1",border:"1px solid #ffca28",borderRadius:8,padding:"12px 16px",fontSize:12,color:"#795548",lineHeight:1.7}}>
+      <strong>💡 백업 권장 시점:</strong> 중요한 데이터 입력 후, 정기적으로(월 1회 이상), 시스템 업데이트 전<br/>
+      <strong>⚠️ 주의:</strong> 복원 시 선택한 항목의 기존 데이터는 백업 파일 내용으로 대체됩니다.
+    </div>
+
+    {/* 복원 확인 모달 */}
+    {restoreModal&&(
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"#fff",borderRadius:12,padding:28,width:520,maxWidth:"95vw",boxShadow:"0 8px 40px rgba(0,0,0,0.2)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <h3 style={{fontSize:16,fontWeight:700,color:"#1a1a2e"}}>백업 파일 복원</h3>
+            <button onClick={()=>{setRestoreModal(false);setRestoreData(null);setRestoreError("");}} style={{background:"none",border:"none",cursor:"pointer"}}><X size={18}/></button>
+          </div>
+
+          {restoreError&&(
+            <div style={{background:"#fce4ec",border:"1px solid #e91e63",borderRadius:6,padding:10,marginBottom:12,fontSize:12,color:"#c62828",display:"flex",gap:6}}>
+              <AlertCircle size={14} style={{flexShrink:0,marginTop:1}}/>{restoreError}
+            </div>
+          )}
+
+          {restoreData&&(
+            <>
+              <div style={{background:"#e3f2fd",border:"1px solid #1976d2",borderRadius:6,padding:10,marginBottom:14,fontSize:12,color:"#1565c0"}}>
+                <div style={{fontWeight:700,marginBottom:4,display:"flex",alignItems:"center",gap:5}}><Clock size={13}/>백업 일시: {restoreData.__date?new Date(restoreData.__date).toLocaleString("ko-KR"):"알 수 없음"}</div>
+                <div>버전: {restoreData.__version||"알 수 없음"}</div>
+              </div>
+
+              <div style={{fontSize:12,fontWeight:700,color:"#333",marginBottom:8}}>복원할 항목 선택 (해제하면 해당 데이터는 변경되지 않습니다)</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:16}}>
+                {restoreKeys.map(k=>{
+                  const cnt=Array.isArray(restoreData[k])?restoreData[k].length:null;
+                  return(
+                    <label key={k} style={{display:"flex",alignItems:"center",gap:5,fontSize:12,cursor:"pointer",background:"#f8f9fa",border:"1px solid #e8eaed",borderRadius:6,padding:"5px 10px"}}>
+                      <input type="checkbox" checked={restoreKeys.includes(k)} onChange={e=>{setRestoreKeys(prev=>e.target.checked?[...prev,k]:prev.filter(x=>x!==k));}}/>
+                      {BACKUP_LABELS[k]||k}{cnt!==null?` (${cnt}건)`:""}
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div style={{background:"#fff3e0",border:"1px solid #ff9800",borderRadius:6,padding:9,marginBottom:16,fontSize:11,color:"#e65100"}}>
+                ⚠️ 선택한 항목의 <strong>기존 데이터가 모두 덮어씌워집니다.</strong> 먼저 현재 데이터를 백업해두세요.
+              </div>
+
+              <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                <button onClick={()=>{setRestoreModal(false);setRestoreData(null);setRestoreError("");}} style={{...S.btn,background:"#888"}}>취소</button>
+                <button onClick={doRestore} disabled={restoreKeys.length===0} style={{...S.btn,background:restoreKeys.length===0?"#ccc":"#d32f2f",display:"flex",alignItems:"center",gap:5}}>
+                  <RotateCcw size={14}/>복원 실행
+                </button>
+              </div>
+            </>
+          )}
+
+          {!restoreData&&restoreError&&(
+            <div style={{display:"flex",justifyContent:"flex-end"}}>
+              <button onClick={()=>{setRestoreModal(false);setRestoreError("");}} style={{...S.btn,background:"#888"}}>닫기</button>
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+  </div>
+  );
+};
+
+const AccountsMgmt = ({accounts}) => {
+  const [exp,setExp]=useState(["자산","부채","자본","수익","비용"]);const grouped={};accounts.forEach(a=>{if(!grouped[a.category])grouped[a.category]={};if(!grouped[a.category][a.subcategory])grouped[a.category][a.subcategory]=[];grouped[a.category][a.subcategory].push(a);});const colors={자산:"#1565c0",부채:"#c62828",자본:"#2e7d32",수익:"#6a1b9a",비용:"#e65100"};
+  return(<div><h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>계정과목관리</h2>{Object.keys(grouped).map(cat=><div key={cat} style={{...S.card,marginBottom:8,overflow:"hidden"}}><div onClick={()=>setExp(p=>p.includes(cat)?p.filter(c=>c!==cat):[...p,cat])} style={{padding:"10px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:7,background:colors[cat]+"10"}}>{exp.includes(cat)?<ChevronDown size={15}/>:<ChevronRight size={15}/>}<span style={{fontWeight:700,color:colors[cat]}}>{cat}</span><span style={{fontSize:12,color:"#888"}}>({Object.values(grouped[cat]).flat().length})</span></div>{exp.includes(cat)&&<div style={{padding:"4px 0"}}>{Object.keys(grouped[cat]).map(sub=><div key={sub}><div style={{padding:"5px 22px",fontSize:12,fontWeight:600,color:"#666",background:"#fafafa"}}>{sub}</div>{grouped[cat][sub].map(a=><div key={a.code} style={{padding:"4px 22px 4px 36px",fontSize:12.5,display:"flex",justifyContent:"space-between",borderBottom:"1px solid #f8f8f8"}}><span><span style={{color:"#999",marginRight:8}}>{a.code}</span>{a.name}</span><span style={{fontSize:11,color:"#aaa"}}>{a.type==="debit"?"차변":"대변"}</span></div>)}</div>)}</div>}</div>)}</div>);
+};
+
+function App({user}) {
+  const [menu,setMenu]=useState("dashboard");
+  const [menuOrder,setMenuOrder]=usePersist("menuOrder",ALL_MENUS.map(m=>m.id));
+  const [hiddenMenus,setHiddenMenus]=usePersist("hiddenMenus",[]);
+
+  // 새 메뉴가 추가됐을 때 menuOrder에 자동 반영
+  useEffect(()=>{
+    const allIds=ALL_MENUS.map(m=>m.id);
+    const missing=allIds.filter(id=>!menuOrder.includes(id));
+    if(missing.length>0){setMenuOrder(prev=>[...prev,...missing]);}
+  },[]);
+  const [myBiz,setMyBiz]=usePersist("myBiz",INIT_BIZ);
+  const [products,setProducts]=usePersist("products",INIT_PRODUCTS);
+  const [partnerPrices,setPartnerPrices]=usePersist("partnerPrices",INIT_PARTNER_PRICES);
+  const [vouchers,setVouchers]=usePersist("vouchers",INIT_VOUCHERS);
+  const [accounts]=useState(INIT_ACCOUNTS);
+  const [partners,setPartners]=usePersist("partners",INIT_PARTNERS);
+  const [statements,setStatements]=usePersist("statements",INIT_STATEMENTS);
+  const [taxInvoices,setTaxInvoices]=usePersist("taxInvoices",INIT_TAXINVOICES);
+  const [autoBackup,setAutoBackup]=usePersist("autoBackup",true);
+  const [lastAutoBackup,setLastAutoBackup]=usePersist("lastAutoBackup","");
+  const [sidebarOpen,setSidebarOpen]=useState(false);
+
+  // 자동 백업 타이머: 매분 체크, 0시~0시 5분이고 오늘 아직 안 했으면 실행
+  const autoBackupRef=useRef({partners,vouchers,statements,taxInvoices,products,partnerPrices,myBiz,menuOrder,hiddenMenus});
+  useEffect(()=>{autoBackupRef.current={partners,vouchers,statements,taxInvoices,products,partnerPrices,myBiz,menuOrder,hiddenMenus};},[partners,vouchers,statements,taxInvoices,products,partnerPrices,myBiz,menuOrder,hiddenMenus]);
+
+  useEffect(()=>{
+    if(!autoBackup)return;
+    const check=()=>{
+      const n=new Date();const h=n.getHours();const m=n.getMinutes();
+      if(h===0&&m<=5){
+        const today=todayStr();
+        const lastDate=lastAutoBackup?lastAutoBackup.slice(0,10):"";
+        if(lastDate!==today){
+          const ts=doAutoBackup(autoBackupRef.current);
+          setLastAutoBackup(ts);
+        }
+      }
+    };
+    check();
+    const iv=setInterval(check,60000);
+    return ()=>clearInterval(iv);
+  },[autoBackup,lastAutoBackup]);
+
+  const page=()=>{switch(menu){
+    case "dashboard": return <Dashboard vouchers={vouchers} accounts={accounts} statements={statements} taxInvoices={taxInvoices}/>;
+    case "statement": return <StatementPage statements={statements} setStatements={setStatements} partners={partners} myBiz={myBiz} products={products} partnerPrices={partnerPrices}/>;
+    case "taxinvoice": return <TaxInvoicePage taxInvoices={taxInvoices} setTaxInvoices={setTaxInvoices} partners={partners} myBiz={myBiz} products={products} partnerPrices={partnerPrices}/>;
+    case "voucher": return <VoucherEntry vouchers={vouchers} setVouchers={setVouchers} accounts={accounts} partners={partners}/>;
+    case "journal": return <Journal vouchers={vouchers} accounts={accounts}/>;
+    case "ledger": return <Ledger vouchers={vouchers} accounts={accounts}/>;
+    case "trial": return <TrialBalance vouchers={vouchers} accounts={accounts}/>;
+    case "bs": return <BalanceSheet vouchers={vouchers} accounts={accounts}/>;
+    case "is": return <IncomeStatement vouchers={vouchers} accounts={accounts}/>;
+    case "partners": return <Partners partners={partners} setPartners={setPartners}/>;
+    case "accounts": return <AccountsMgmt accounts={accounts}/>;
+    case "products": return <ProductMgmt products={products} setProducts={setProducts}/>;
+    case "partnerPrice": return <PartnerPricePage partners={partners} products={products} partnerPrices={partnerPrices} setPartnerPrices={setPartnerPrices}/>;
+    case "bizSettings": return <BizSettings myBiz={myBiz} setMyBiz={setMyBiz}/>;
+    case "backup": return <BackupRestore partners={partners} vouchers={vouchers} statements={statements} taxInvoices={taxInvoices} products={products} partnerPrices={partnerPrices} myBiz={myBiz} menuOrder={menuOrder} hiddenMenus={hiddenMenus} setPartners={setPartners} setVouchers={setVouchers} setStatements={setStatements} setTaxInvoices={setTaxInvoices} setProducts={setProducts} setPartnerPrices={setPartnerPrices} setMyBiz={setMyBiz} setMenuOrder={setMenuOrder} setHiddenMenus={setHiddenMenus} autoBackup={autoBackup} setAutoBackup={setAutoBackup} lastAutoBackup={lastAutoBackup} setLastAutoBackup={setLastAutoBackup}/>;
+    default: return <Dashboard vouchers={vouchers} accounts={accounts} statements={statements} taxInvoices={taxInvoices}/>;
+  }};
+
+  return (
+    <div style={{display:"flex",minHeight:"100vh",background:"#f4f5f7",fontFamily:"'Noto Sans KR',-apple-system,sans-serif"}}>
+      <div className={"sidebar-overlay"+(sidebarOpen?" open":"")} onClick={()=>setSidebarOpen(false)}/>
+      <Sidebar activeMenu={menu} setActiveMenu={setMenu} menuOrder={menuOrder} setMenuOrder={setMenuOrder} hiddenMenus={hiddenMenus} setHiddenMenus={setHiddenMenus} onClose={()=>setSidebarOpen(false)} isOpen={sidebarOpen}/>
+      <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        <div className="topbar">
+          <button className="hamburger" onClick={()=>setSidebarOpen(true)}><Menu size={22}/></button>
+          <span style={{fontSize:16,fontWeight:700,flex:1}}>LocalERP</span>
+          <span style={{fontSize:11,opacity:0.7,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user&&user.email}</span>
+          <button onClick={()=>__auth.signOut()} style={{background:'rgba(255,255,255,0.15)',border:'none',color:'#fff',borderRadius:6,padding:'4px 10px',fontSize:12,cursor:'pointer',marginLeft:6}}>로그아웃</button>
+        </div>
+        <div className="main-content" style={{flex:1,padding:"22px 26px",overflowX:"auto"}}>{page()}</div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<AuthRoot/>);
+</script>
+</body>
+</html>
