@@ -250,7 +250,10 @@ function LoginScreen({onLogin, onLocalMode}) {
     setLoading(true);
     try {
       const provider = new firebase.auth.GoogleAuthProvider();
-      await __auth.signInWithPopup(provider);
+      provider.addScope('https://www.googleapis.com/auth/drive.file');
+      const result = await __auth.signInWithPopup(provider);
+      // Google Drive 접근용 토큰 저장
+      if(result.credential){window.__gAccessToken=result.credential.accessToken;}
     } catch(e) {
       if (e.code !== 'auth/popup-closed-by-user') {
         setErr(errMap[e.code] || e.message);
@@ -361,7 +364,7 @@ function AuthRoot() {
     );
   }
   if (!user && !localMode) return <LoginScreen onLocalMode={enterLocalMode}/>;
-  return <App user={user}/>;
+  return <App user={user} localMode={localMode}/>;
 }
 
 const INIT_BIZ = { name:"주식회사 이지솔루션", bizNo:"123-45-67890", ceo:"홍길동", addr:"서울시 강남구 테헤란로 123", tel:"02-555-1234", fax:"02-555-1235", email:"info@easysol.co.kr", 업태:"서비스업", 종목:"소프트웨어 개발" };
@@ -1361,7 +1364,7 @@ const BACKUP_VERSION = "1.0";
 const BACKUP_KEYS = ["partners","vouchers","statements","taxInvoices","products","partnerPrices","myBiz","menuOrder","hiddenMenus"];
 const BACKUP_LABELS = {partners:"거래처",vouchers:"전표",statements:"거래명세서",taxInvoices:"세금계산서",products:"품목/단가",partnerPrices:"거래처별단가",myBiz:"회사정보",menuOrder:"메뉴순서",hiddenMenus:"숨긴메뉴"};
 
-// 자동 백업 유틸
+// 자동 백업 유틸 (로컬 파일 다운로드)
 function doAutoBackup(allData){
   const ts=new Date();
   const tag=ts.getFullYear()+String(ts.getMonth()+1).padStart(2,"0")+String(ts.getDate()).padStart(2,"0")+"_자동";
@@ -1370,9 +1373,89 @@ function doAutoBackup(allData){
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`localerp_백업_${tag}.json`;a.click();
   return ts.toISOString();
 }
+// Google Drive 백업 유틸
+async function getGDriveToken(){
+  // 저장된 토큰 사용 또는 재인증
+  if(window.__gAccessToken)return window.__gAccessToken;
+  try{
+    const user=__auth.currentUser;
+    if(!user)return null;
+    const provider=new firebase.auth.GoogleAuthProvider();
+    provider.addScope('https://www.googleapis.com/auth/drive.file');
+    const result=await user.reauthenticateWithPopup(provider);
+    if(result.credential){window.__gAccessToken=result.credential.accessToken;return result.credential.accessToken;}
+  }catch(e){console.warn('Drive 토큰 오류:',e);}
+  return null;
+}
+async function getOrCreateDriveFolder(token){
+  // LocalERP_백업 폴더 찾기 또는 생성
+  const searchUrl='https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent("name='LocalERP_백업' and mimeType='application/vnd.google-apps.folder' and trashed=false")+'&fields=files(id,name)';
+  const res=await fetch(searchUrl,{headers:{Authorization:'Bearer '+token}});
+  const data=await res.json();
+  if(data.files&&data.files.length>0)return data.files[0].id;
+  // 폴더 생성
+  const createRes=await fetch('https://www.googleapis.com/drive/v3/files',{
+    method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+    body:JSON.stringify({name:'LocalERP_백업',mimeType:'application/vnd.google-apps.folder'})
+  });
+  const folder=await createRes.json();
+  return folder.id;
+}
+async function doCloudBackup(allData){
+  const token=await getGDriveToken();
+  if(!token)return null;
+  const ts=new Date();
+  const dateKey=ts.getFullYear()+String(ts.getMonth()+1).padStart(2,"0")+String(ts.getDate()).padStart(2,"0");
+  const fileName=`localerp_백업_${dateKey}.json`;
+  const payload={__version:BACKUP_VERSION,__date:ts.toISOString(),__app:"LocalERP",__auto:true,...allData};
+  const folderId=await getOrCreateDriveFolder(token);
+  // 같은 날짜 파일이 있으면 덮어쓰기
+  const existRes=await fetch('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(`name='${fileName}' and '${folderId}' in parents and trashed=false`)+'&fields=files(id)',{headers:{Authorization:'Bearer '+token}});
+  const existData=await existRes.json();
+  const content=JSON.stringify(payload,null,2);
+  const blob=new Blob([content],{type:'application/json'});
+  if(existData.files&&existData.files.length>0){
+    // 기존 파일 업데이트
+    await fetch('https://www.googleapis.com/upload/drive/v3/files/'+existData.files[0].id+'?uploadType=media',{
+      method:'PATCH',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:blob
+    });
+  }else{
+    // 새 파일 생성 (multipart)
+    const metadata=JSON.stringify({name:fileName,parents:[folderId]});
+    const form=new FormData();
+    form.append('metadata',new Blob([metadata],{type:'application/json'}));
+    form.append('file',blob);
+    await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
+      method:'POST',headers:{Authorization:'Bearer '+token},body:form
+    });
+  }
+  return ts.toISOString();
+}
+async function listCloudBackups(){
+  const token=await getGDriveToken();
+  if(!token)return[];
+  try{
+    const folderId=await getOrCreateDriveFolder(token);
+    const res=await fetch('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(`'${folderId}' in parents and trashed=false`)+'&orderBy=name+desc&fields=files(id,name,createdTime,size)',{headers:{Authorization:'Bearer '+token}});
+    const data=await res.json();
+    return(data.files||[]).map(f=>({id:f.id,key:f.name.replace('localerp_백업_','').replace('.json',''),name:f.name,date:f.createdTime,size:f.size}));
+  }catch(e){console.warn(e);return[];}
+}
+async function downloadCloudBackup(fileId){
+  const token=await getGDriveToken();
+  if(!token)return null;
+  const res=await fetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media',{headers:{Authorization:'Bearer '+token}});
+  return await res.json();
+}
+async function deleteCloudBackup(fileId){
+  const token=await getGDriveToken();
+  if(!token)return false;
+  await fetch('https://www.googleapis.com/drive/v3/files/'+fileId,{method:'DELETE',headers:{Authorization:'Bearer '+token}});
+  return true;
+}
 function todayStr(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 
-const BackupRestore = ({partners,vouchers,statements,taxInvoices,products,partnerPrices,myBiz,menuOrder,hiddenMenus,setPartners,setVouchers,setStatements,setTaxInvoices,setProducts,setPartnerPrices,setMyBiz,setMenuOrder,setHiddenMenus,autoBackup,setAutoBackup,lastAutoBackup,setLastAutoBackup}) => {
+const BackupRestore = ({partners,vouchers,statements,taxInvoices,products,partnerPrices,myBiz,menuOrder,hiddenMenus,setPartners,setVouchers,setStatements,setTaxInvoices,setProducts,setPartnerPrices,setMyBiz,setMenuOrder,setHiddenMenus,autoBackup,setAutoBackup,lastAutoBackup,setLastAutoBackup,localMode}) => {
   const allData = {partners,vouchers,statements,taxInvoices,products,partnerPrices,myBiz,menuOrder,hiddenMenus};
   const allSetters = {setPartners,setVouchers,setStatements,setTaxInvoices,setProducts,setPartnerPrices,setMyBiz,setMenuOrder,setHiddenMenus};
   const [restoreModal,setRestoreModal]=useState(false);
@@ -1381,6 +1464,24 @@ const BackupRestore = ({partners,vouchers,statements,taxInvoices,products,partne
   const [restoreKeys,setRestoreKeys]=useState([]);
   const [doneMsg,setDoneMsg]=useState("");
   const fileRef=useRef(null);
+  // 클라우드 백업 목록
+  const [cloudBackups,setCloudBackups]=useState([]);
+  const [cloudLoading,setCloudLoading]=useState(false);
+  const [cloudError,setCloudError]=useState("");
+  const loadCloudBackups=async()=>{setCloudLoading(true);setCloudError("");try{const list=await listCloudBackups();setCloudBackups(list);}catch(e){setCloudError("Google Drive 접근 실패. 다시 로그인해 주세요.");}setCloudLoading(false);};
+  useEffect(()=>{if(!localMode)loadCloudBackups();},[localMode]);
+  const doCloudBackupNow=async()=>{try{const ts=await doCloudBackup(allData);if(ts){setDoneMsg("Google Drive에 백업 완료!");setTimeout(()=>setDoneMsg(""),3000);loadCloudBackups();}}catch(e){setCloudError("백업 실패: "+e.message);}};
+  const restoreFromCloud=async(backup)=>{
+    setCloudLoading(true);
+    try{
+      const data=await downloadCloudBackup(backup.id);
+      const found=BACKUP_KEYS.filter(k=>data[k]!==undefined);
+      if(found.length===0){setRestoreError("복원할 데이터가 없습니다.");setRestoreData(null);setRestoreModal(true);setCloudLoading(false);return;}
+      setRestoreError("");setRestoreData(data);setRestoreKeys(found);setRestoreModal(true);
+    }catch(e){setCloudError("복원 데이터 불러오기 실패");}
+    setCloudLoading(false);
+  };
+  const handleDeleteCloud=async(fileId)=>{if(!confirm("이 백업을 삭제하시겠습니까?"))return;await deleteCloudBackup(fileId);loadCloudBackups();};
 
   const now=()=>{const d=new Date();return d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0")+"_"+String(d.getHours()).padStart(2,"0")+String(d.getMinutes()).padStart(2,"0");};
 
@@ -1458,26 +1559,76 @@ const BackupRestore = ({partners,vouchers,statements,taxInvoices,products,partne
             <Save size={16} color="#1565c0"/>데이터 백업
           </div>
           <div style={{fontSize:12,color:"#666",lineHeight:1.6}}>
-            거래처, 전표, 거래명세서, 세금계산서, 품목, 단가, 회사정보 등<br/>
-            모든 데이터를 <strong>.json</strong> 파일로 저장합니다.
+            {localMode?"모든 데이터를 .json 파일로 저장합니다.":"클라우드에 현재 스냅샷을 백업합니다. 파일 다운로드도 가능합니다."}
           </div>
         </div>
-        <button onClick={doBackup} style={{...S.btn,background:"#1565c0",display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap",padding:"10px 18px"}}>
-          <Download size={15}/>지금 백업하기
-        </button>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {!localMode&&<button onClick={doCloudBackupNow} style={{...S.btn,background:"#1565c0",display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap",padding:"10px 18px"}}>
+            <Save size={15}/>클라우드 백업
+          </button>}
+          <button onClick={doBackup} style={{...S.btn,background:localMode?"#1565c0":"#757575",display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap",padding:"10px 18px"}}>
+            <Download size={15}/>파일 다운로드
+          </button>
+        </div>
       </div>
     </div>
 
-    {/* 복원 */}
+    {/* Google Drive 백업 목록 */}
+    {!localMode&&(
+    <div style={{...S.card,padding:20,marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div style={{fontSize:15,fontWeight:700,color:"#1a1a2e",display:"flex",alignItems:"center",gap:7}}>
+          <HardDrive size={16} color="#4285F4"/>
+          <svg width="18" height="18" viewBox="0 0 87.3 78" style={{marginRight:-2}}><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3L29 52.7H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066DA"/><path d="m43.65 25-15.25 26.4 15.25 26.4h30.5L58.9 51.4 43.65 25z" fill="#00AC47"/><path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75L86.1 57.2c.8-1.4 1.2-2.95 1.2-4.5H58.9L73.55 76.8z" fill="#EA4335"/><path d="M43.65 25 29 1.6C27.65 2.4 26.5 3.5 25.7 4.9L1.2 47.6C.4 49 0 50.55 0 52.1h29z" fill="#00832D"/><path d="m58.9 25H29l14.65 25.4L58.9 25z" fill="#2684FC"/><path d="M87.3 52.1 73.55 1.6C72.75.2 71.6-.9 70.25-1.7L43.65 25 58.9 52.1z" fill="#FFBA00"/></svg>
+          Google Drive 백업
+        </div>
+        <button onClick={loadCloudBackups} disabled={cloudLoading} style={{...S.btnSec,fontSize:11,padding:"5px 12px",display:"flex",alignItems:"center",gap:4}}>
+          <RotateCcw size={12}/>{cloudLoading?"불러오는 중...":"새로고침"}
+        </button>
+      </div>
+      {cloudError&&<div style={{background:"#fff3e0",border:"1px solid #ff9800",borderRadius:6,padding:"8px 12px",marginBottom:10,fontSize:12,color:"#e65100"}}>{cloudError}</div>}
+      {cloudBackups.length===0?(
+        <div style={{textAlign:"center",padding:20,color:"#999",fontSize:13}}>{cloudLoading?"불러오는 중...":"Google Drive에 백업이 없습니다."}</div>
+      ):(
+        <div style={{maxHeight:350,overflowY:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>
+              <th style={S.th}>날짜</th>
+              <th style={S.th}>파일명</th>
+              <th style={{...S.th,textAlign:"right"}}>크기</th>
+              <th style={{...S.th,textAlign:"center"}}>관리</th>
+            </tr></thead>
+            <tbody>{cloudBackups.map(b=>{
+              const dateStr=b.key.length>=8?`${b.key.slice(0,4)}-${b.key.slice(4,6)}-${b.key.slice(6,8)}`:b.key;
+              const sizeKB=b.size?Math.round(parseInt(b.size)/1024):'-';
+              return(
+                <tr key={b.id} style={{borderBottom:"1px solid #f0f0f0"}}>
+                  <td style={{padding:"8px 6px",fontWeight:600}}>{dateStr}</td>
+                  <td style={{padding:"8px 6px",color:"#555",fontSize:11}}>{b.name}</td>
+                  <td style={{padding:"8px 6px",textAlign:"right",color:"#888"}}>{sizeKB}KB</td>
+                  <td style={{padding:"8px 6px",textAlign:"center",whiteSpace:"nowrap"}}>
+                    <button onClick={()=>restoreFromCloud(b)} style={{...S.btnSm,color:"#1565c0"}}><RotateCcw size={11}/> 복원</button>
+                    <button onClick={()=>handleDeleteCloud(b.id)} style={{...S.btnSm,color:"#d32f2f",marginLeft:4}}><Trash2 size={11}/> 삭제</button>
+                  </td>
+                </tr>
+              );
+            })}</tbody>
+          </table>
+        </div>
+      )}
+      <div style={{fontSize:11,color:"#999",marginTop:8}}>백업 파일은 Google Drive의 "LocalERP_백업" 폴더에 저장됩니다</div>
+    </div>
+    )}
+
+    {/* 파일 복원 */}
     <div style={{...S.card,padding:20,marginBottom:12}}>
       <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
         <div>
           <div style={{fontSize:15,fontWeight:700,color:"#1a1a2e",marginBottom:6,display:"flex",alignItems:"center",gap:7}}>
-            <RotateCcw size={16} color="#2e7d32"/>데이터 복원
+            <RotateCcw size={16} color="#2e7d32"/>파일에서 복원
           </div>
           <div style={{fontSize:12,color:"#666",lineHeight:1.6}}>
-            이전에 백업한 <strong>.json</strong> 파일을 불러와 데이터를 복원합니다.<br/>
-            복원 항목을 선택할 수 있으며, 기존 데이터는 덮어씌워집니다.
+            이전에 다운로드한 <strong>.json</strong> 백업 파일에서 복원합니다.
           </div>
         </div>
         <button onClick={()=>fileRef.current&&fileRef.current.click()} style={{...S.btn,background:"#2e7d32",display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap",padding:"10px 18px"}}>
@@ -1489,13 +1640,21 @@ const BackupRestore = ({partners,vouchers,statements,taxInvoices,products,partne
 
     {/* 자동 백업 설정 */}
     <div style={{...S.card,padding:20,marginBottom:12}}>
+      {!localMode&&(
+        <div style={{background:"#e8f5e9",border:"1px solid #81c784",borderRadius:8,padding:"12px 16px",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
+          <CheckCircle size={16} color="#2e7d32"/>
+          <div style={{fontSize:12.5,color:"#2e7d32",lineHeight:1.6}}>
+            <strong>Google Drive 클라우드에 연동 중</strong> — 데이터가 실시간 저장되며, 매일 자정에 날짜별 스냅샷이 Google Drive에 백업됩니다. 백업 파일은 직접 관리할 수 있습니다.
+          </div>
+        </div>
+      )}
       <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
         <div style={{flex:1}}>
           <div style={{fontSize:15,fontWeight:700,color:"#1a1a2e",marginBottom:6,display:"flex",alignItems:"center",gap:7}}>
             <Clock size={16} color="#6a1b9a"/>자동 백업 (매일 0시)
           </div>
           <div style={{fontSize:12,color:"#666",lineHeight:1.6,marginBottom:8}}>
-            앱이 열려 있을 때 매일 자정(00:00~00:05)에 자동으로 백업 파일을 다운로드합니다.
+            {localMode?"앱이 열려 있을 때 매일 자정(00:00~00:05)에 백업 파일을 다운로드합니다.":"매일 자정에 Google Drive에 스냅샷이 저장됩니다. (파일 다운로드 없음)"}
           </div>
           {lastAutoBackup&&(
             <div style={{fontSize:11,color:"#888",display:"flex",alignItems:"center",gap:5}}>
@@ -1511,7 +1670,7 @@ const BackupRestore = ({partners,vouchers,statements,taxInvoices,products,partne
           }}>
             <div style={{
               width:22,height:22,borderRadius:11,background:"#fff",position:"absolute",top:2,
-              left:autoBackup?24:2,transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)"
+              left:autoBackup&&localMode?24:2,transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)"
             }}/>
           </button>
         </div>
@@ -1589,7 +1748,7 @@ const AccountsMgmt = ({accounts}) => {
   return(<div><h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>계정과목관리</h2>{Object.keys(grouped).map(cat=><div key={cat} style={{...S.card,marginBottom:8,overflow:"hidden"}}><div onClick={()=>setExp(p=>p.includes(cat)?p.filter(c=>c!==cat):[...p,cat])} style={{padding:"10px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:7,background:colors[cat]+"10"}}>{exp.includes(cat)?<ChevronDown size={15}/>:<ChevronRight size={15}/>}<span style={{fontWeight:700,color:colors[cat]}}>{cat}</span><span style={{fontSize:12,color:"#888"}}>({Object.values(grouped[cat]).flat().length})</span></div>{exp.includes(cat)&&<div style={{padding:"4px 0"}}>{Object.keys(grouped[cat]).map(sub=><div key={sub}><div style={{padding:"5px 22px",fontSize:12,fontWeight:600,color:"#666",background:"#fafafa"}}>{sub}</div>{grouped[cat][sub].map(a=><div key={a.code} style={{padding:"4px 22px 4px 36px",fontSize:12.5,display:"flex",justifyContent:"space-between",borderBottom:"1px solid #f8f8f8"}}><span><span style={{color:"#999",marginRight:8}}>{a.code}</span>{a.name}</span><span style={{fontSize:11,color:"#aaa"}}>{a.type==="debit"?"차변":"대변"}</span></div>)}</div>)}</div>}</div>)}</div>);
 };
 
-function App({user}) {
+function App({user, localMode}) {
   const [menu,setMenu]=useState("dashboard");
   const [menuOrder,setMenuOrder]=usePersist("menuOrder",ALL_MENUS.map(m=>m.id));
   const [hiddenMenus,setHiddenMenus]=usePersist("hiddenMenus",[]);
@@ -1620,23 +1779,28 @@ function App({user}) {
 
   useEffect(()=>{
     if(!autoBackup)return;
-    const check=()=>{
+    const check=async()=>{
       const n=new Date();const h=n.getHours();const m=n.getMinutes();
       if(h===0&&m<=5){
         const today=todayStr();
-        // ref로 최신값 참조 + 로컬 날짜 기준 비교 (타임존 버그 수정)
         const last=lastAutoBackupRef.current;
         const lastDate=last?new Date(last).toLocaleDateString("sv-SE"):"";
         if(lastDate!==today){
-          const ts=doAutoBackup(autoBackupRef.current);
-          lastAutoBackupRef.current=ts; // ref 먼저 업데이트로 중복 방지
-          setLastAutoBackup(ts);
+          let ts;
+          if(localMode){
+            // 로컬 모드: 파일 다운로드 백업
+            ts=doAutoBackup(autoBackupRef.current);
+          }else{
+            // Google Drive 모드: 클라우드 스냅샷 백업
+            ts=await doCloudBackup(autoBackupRef.current);
+          }
+          if(ts){lastAutoBackupRef.current=ts;setLastAutoBackup(ts);}
         }
       }
     };
     const iv=setInterval(check,60000);
     return ()=>clearInterval(iv);
-  },[autoBackup]);
+  },[autoBackup,localMode]);
 
   const page=()=>{switch(menu){
     case "dashboard": return <Dashboard vouchers={vouchers} accounts={accounts} statements={statements} taxInvoices={taxInvoices}/>;
@@ -1653,7 +1817,7 @@ function App({user}) {
     case "products": return <ProductMgmt products={products} setProducts={setProducts}/>;
     case "partnerPrice": return <PartnerPricePage partners={partners} products={products} partnerPrices={partnerPrices} setPartnerPrices={setPartnerPrices}/>;
     case "bizSettings": return <BizSettings myBiz={myBiz} setMyBiz={setMyBiz}/>;
-    case "backup": return <BackupRestore partners={partners} vouchers={vouchers} statements={statements} taxInvoices={taxInvoices} products={products} partnerPrices={partnerPrices} myBiz={myBiz} menuOrder={menuOrder} hiddenMenus={hiddenMenus} setPartners={setPartners} setVouchers={setVouchers} setStatements={setStatements} setTaxInvoices={setTaxInvoices} setProducts={setProducts} setPartnerPrices={setPartnerPrices} setMyBiz={setMyBiz} setMenuOrder={setMenuOrder} setHiddenMenus={setHiddenMenus} autoBackup={autoBackup} setAutoBackup={setAutoBackup} lastAutoBackup={lastAutoBackup} setLastAutoBackup={setLastAutoBackup}/>;
+    case "backup": return <BackupRestore partners={partners} vouchers={vouchers} statements={statements} taxInvoices={taxInvoices} products={products} partnerPrices={partnerPrices} myBiz={myBiz} menuOrder={menuOrder} hiddenMenus={hiddenMenus} setPartners={setPartners} setVouchers={setVouchers} setStatements={setStatements} setTaxInvoices={setTaxInvoices} setProducts={setProducts} setPartnerPrices={setPartnerPrices} setMyBiz={setMyBiz} setMenuOrder={setMenuOrder} setHiddenMenus={setHiddenMenus} autoBackup={autoBackup} setAutoBackup={setAutoBackup} lastAutoBackup={lastAutoBackup} setLastAutoBackup={setLastAutoBackup} localMode={localMode}/>;
     default: return <Dashboard vouchers={vouchers} accounts={accounts} statements={statements} taxInvoices={taxInvoices}/>;
   }};
 
