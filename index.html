@@ -1439,6 +1439,35 @@ function getGDriveToken(){
   try{const stored=sessionStorage.getItem('gDriveToken');if(stored){window.__gAccessToken=stored;return stored;}}catch(e){}
   return null;
 }
+async function getDriveTokenWithPopup() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  provider.addScope('https://www.googleapis.com/auth/drive.file');
+  provider.setCustomParameters({prompt:'consent',access_type:'offline'});
+  
+  let result;
+  try {
+    if (__auth.currentUser && __auth.currentUser.providerData.some(p => p.providerId === 'google.com')) {
+      result = await __auth.currentUser.reauthenticateWithPopup(provider);
+    } else if (__auth.currentUser) {
+      result = await __auth.currentUser.linkWithPopup(provider);
+    } else {
+      result = await __auth.signInWithPopup(provider);
+    }
+  } catch (e) {
+    if (e.code === 'auth/credential-already-in-use') {
+      result = await __auth.signInWithPopup(provider);
+    } else {
+      throw e;
+    }
+  }
+
+  let _at=null;
+  try{const cred=firebase.auth.GoogleAuthProvider.credentialFromResult(result);if(cred&&cred.accessToken)_at=cred.accessToken;}catch(e){}
+  if(!_at&&result.credential&&result.credential.accessToken)_at=result.credential.accessToken;
+  if(_at){window.__gAccessToken=_at;try{sessionStorage.setItem('gDriveToken',_at);}catch(e){}}
+  
+  return _at;
+}
 async function driveFetch(url,options){
   const res=await fetch(url,options);
   if(res.status===401||res.status===403){clearGDriveToken();throw new Error('Google Drive 권한이 만료되었습니다. 로그아웃 후 다시 Google로 로그인해 주세요.');}
@@ -1526,9 +1555,34 @@ const BackupRestore = ({partners,vouchers,statements,taxInvoices,products,partne
   const [cloudBackups,setCloudBackups]=useState([]);
   const [cloudLoading,setCloudLoading]=useState(false);
   const [cloudError,setCloudError]=useState("");
-  const loadCloudBackups=async()=>{setCloudLoading(true);setCloudError("");try{const list=await listCloudBackups();setCloudBackups(list);}catch(e){setCloudError("Google Drive 접근 실패. 다시 로그인해 주세요.");}setCloudLoading(false);};
+  const loadCloudBackups=async()=>{
+    setCloudLoading(true);setCloudError("");
+    const token=getGDriveToken();
+    if(!token){ setCloudError("no_token"); setCloudBackups([]); setCloudLoading(false); return; }
+    try{
+      const list=await listCloudBackups();
+      setCloudBackups(list);
+    }catch(e){
+      setCloudError("Google Drive 접근 실패. 다시 로그인이 필요합니다.");
+    }
+    setCloudLoading(false);
+  };
+  const connectGDriveAndLoad=async()=>{
+    setCloudLoading(true);setCloudError("");
+    try {
+      await getDriveTokenWithPopup();
+      loadCloudBackups();
+    } catch(e) {
+      setCloudError("Google 계정 연결 실패: " + e.message);
+      setCloudLoading(false);
+    }
+  };
   useEffect(()=>{if(!localMode)loadCloudBackups();},[localMode]);
-  const doCloudBackupNow=async()=>{try{const ts=await doCloudBackup(allData);if(ts){setDoneMsg("Google Drive에 백업 완료!");setTimeout(()=>setDoneMsg(""),3000);loadCloudBackups();}}catch(e){setCloudError("백업 실패: "+e.message);}};
+  const doCloudBackupNow=async()=>{
+    const token=getGDriveToken();
+    if(!token){ setCloudError("no_token"); return; }
+    try{const ts=await doCloudBackup(allData);if(ts){setDoneMsg("Google Drive에 백업 완료!");setTimeout(()=>setDoneMsg(""),3000);loadCloudBackups();}}catch(e){setCloudError("백업 실패: "+e.message);}
+  };
   const restoreFromCloud=async(backup)=>{
     setCloudLoading(true);
     try{
@@ -1644,10 +1698,23 @@ const BackupRestore = ({partners,vouchers,statements,taxInvoices,products,partne
           <RotateCcw size={12}/>{cloudLoading?"불러오는 중...":"새로고침"}
         </button>
       </div>
-      {cloudError&&<div style={{background:"#fff3e0",border:"1px solid #ff9800",borderRadius:6,padding:"8px 12px",marginBottom:10,fontSize:12,color:"#e65100"}}>{cloudError}</div>}
-      {cloudBackups.length===0?(
+      {cloudError && (
+        <div style={{background:"#fff3e0",border:"1px solid #ff9800",borderRadius:6,padding:"8px 12px",marginBottom:10,fontSize:12,color:"#e65100"}}>
+          <div style={{marginBottom: (cloudError==="no_token" || cloudError.includes("권한") || cloudError.includes("로그인")) ? 8 : 0}}>
+            {cloudError==="no_token" ? "Google Drive 접근 권한이 없거나 만료되었습니다." : cloudError}
+          </div>
+          {(cloudError==="no_token" || cloudError.includes("권한") || cloudError.includes("로그인")) && (
+            <div style={{marginTop:6,textAlign:"center"}}>
+              <button onClick={connectGDriveAndLoad} style={{...S.btnSm,padding:"6px 12px",fontSize:12,background:"#1565c0",color:"#fff",border:"none",borderRadius:4,cursor:"pointer"}}>
+                Google 계정 연결 (토큰 갱신)
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      {cloudError!=="no_token" && cloudBackups.length===0 ? (
         <div style={{textAlign:"center",padding:20,color:"#999",fontSize:13}}>{cloudLoading?"불러오는 중...":"Google Drive에 백업이 없습니다."}</div>
-      ):(
+      ) : cloudError!=="no_token" ? (
         <div style={{maxHeight:350,overflowY:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
             <thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>
@@ -1673,7 +1740,7 @@ const BackupRestore = ({partners,vouchers,statements,taxInvoices,products,partne
             })}</tbody>
           </table>
         </div>
-      )}
+      ) : null}
       <div style={{fontSize:11,color:"#999",marginTop:8}}>백업 파일은 Google Drive의 "LocalERP_백업" 폴더에 저장됩니다</div>
     </div>
     )}
