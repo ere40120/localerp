@@ -586,56 +586,105 @@ const StatementPreview = ({stmt,partner,myBiz,half}) => {
   const TOTAL_ROWS=half?7:12;
   const ROW_H=fs(22);
   const hasVat=stmt.includeVat!==false;
+  // 날짜 파싱 (월일 표시용)
+  const dateStr=stmt.date||"";
+  const dateParts=dateStr.split("-");
+  const monthDay=dateParts.length>=3?(parseInt(dateParts[1])+"/"+parseInt(dateParts[2])):"";
   // 셀 스타일
   const border="1px solid #999";
   const thickBorder="1px solid #333";
   const b={border,padding:`0 ${fs(4)}px`,fontSize:fs(10.5),lineHeight:1,height:ROW_H,boxSizing:"border-box",verticalAlign:"middle"};
   const h={...b,border:thickBorder,background:"#dde8f5",fontWeight:700,textAlign:"center",fontSize:fs(10)};
-  const hdr={...b,border:thickBorder,background:"#dde8f5",fontWeight:700,textAlign:"center",writingMode:"initial"};
+  const hdr={...b,border:thickBorder,background:"#dde8f5",fontWeight:700,textAlign:"center"};
   // 행 데이터: 실제 품목 + 빈 행으로 TOTAL_ROWS 채우기
   const rows=Array.from({length:TOTAL_ROWS},(_, i)=>stmt.items[i]||null);
   const cols=hasVat
-    ?[{label:"No",w:fs(24),align:"center"},{label:"품목명",w:"auto",align:"left"},{label:"규격",w:fs(60),align:"center"},{label:"단위",w:fs(30),align:"center"},{label:"수량",w:fs(36),align:"right"},{label:"단가",w:fs(72),align:"right"},{label:"공급가액",w:fs(80),align:"right"},{label:"세액",w:fs(68),align:"right"},{label:"비고",w:fs(52),align:"left"}]
-    :[{label:"No",w:fs(24),align:"center"},{label:"품목명",w:"auto",align:"left"},{label:"규격",w:fs(60),align:"center"},{label:"단위",w:fs(30),align:"center"},{label:"수량",w:fs(36),align:"right"},{label:"단가",w:fs(72),align:"right"},{label:"금액",w:fs(80),align:"right"},{label:"비고",w:fs(52),align:"left"}];
+    ?[{label:"월일",w:fs(36),align:"center"},{label:"품목/규격",w:"auto",align:"left"},{label:"단위",w:fs(30),align:"center"},{label:"수량",w:fs(40),align:"right"},{label:"단가",w:fs(72),align:"right"},{label:"공급가액",w:fs(80),align:"right"},{label:"세액",w:fs(68),align:"right"},{label:"비고",w:fs(52),align:"left"}]
+    :[{label:"월일",w:fs(36),align:"center"},{label:"품목/규격",w:"auto",align:"left"},{label:"단위",w:fs(30),align:"center"},{label:"수량",w:fs(40),align:"right"},{label:"단가",w:fs(72),align:"right"},{label:"금액",w:fs(80),align:"right"},{label:"비고",w:fs(52),align:"left"}];
   return (
     <div style={{width:"100%",margin:"0 auto",fontFamily:"'Malgun Gothic','맑은 고딕',sans-serif",color:"#000",boxSizing:"border-box"}}>
       {/* 제목 */}
-      <div style={{textAlign:"center",fontSize:fs(half?16:20),fontWeight:800,letterSpacing:fs(4),border:thickBorder,borderBottom:"none",padding:`${fs(5)}px 0`,background:"#fff"}}>
+      <div style={{textAlign:"center",fontSize:fs(half?16:20),fontWeight:800,letterSpacing:fs(4),border:thickBorder,borderBottom:"none",padding:`${fs(6)}px ${fs(8)}px`,background:"#fff",position:"relative"}}>
         거 래 명 세 서
         <span style={{fontSize:fs(9),fontWeight:400,marginLeft:fs(6),letterSpacing:0}}>(공급자 보관용)</span>
+        <span style={{position:"absolute",right:fs(10),top:"50%",transform:"translateY(-50%)",fontSize:fs(9),fontWeight:400,letterSpacing:0}}>작성일자: {dateStr}</span>
       </div>
-      {/* 공급자 / 수신 */}
-      <table style={{width:"100%",borderCollapse:"collapse",border:thickBorder,marginBottom:0,tableLayout:"fixed"}}>
+      {/* 공급자 / 공급받는자 */}
+      <table style={{width:"100%",borderCollapse:"collapse",border:thickBorder,borderTop:"none",marginBottom:0,tableLayout:"fixed"}}>
         <tbody>
           <tr>
-            <td style={{...hdr,width:fs(40),borderRight:thickBorder,borderBottom:border}}>공<br/>급<br/>자</td>
-            <td colSpan={3} style={{padding:0,borderRight:thickBorder,borderBottom:border}}>
+            <td rowSpan={2} style={{...hdr,width:fs(28),borderRight:thickBorder,borderTop:"none",verticalAlign:"middle",letterSpacing:fs(2),fontSize:fs(10),lineHeight:1.6}}>공<br/>급<br/>자</td>
+            <td style={{padding:0,borderRight:thickBorder,borderTop:"none"}}>
               <table style={{width:"100%",borderCollapse:"collapse"}}><tbody>
-                <tr><td style={{...h,width:fs(65),borderLeft:"none",borderTop:"none",borderBottom:border}}>등록번호</td><td style={{...b,borderLeft:border,borderTop:"none",borderBottom:border,fontWeight:700}}>{myBiz.bizNo}</td></tr>
-                <tr><td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:border}}>상호(법인명)</td><td style={{...b,borderLeft:border,borderTop:"none",borderBottom:border}}>{myBiz.name}</td></tr>
-                <tr><td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:border}}>사업장주소</td><td style={{...b,borderLeft:border,borderTop:"none",borderBottom:border,fontSize:fs(9)}}>{myBiz.addr}</td></tr>
-                <tr><td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:"none"}}>업태/종목</td><td style={{...b,borderLeft:border,borderTop:"none",borderBottom:"none",fontSize:fs(9)}}>{myBiz.업태} / {myBiz.종목}</td></tr>
+                <tr>
+                  <td style={{...h,width:fs(58),borderLeft:"none",borderTop:"none",borderBottom:border,borderRight:border}}>등록번호</td>
+                  <td colSpan={3} style={{...b,borderLeft:"none",borderTop:"none",borderBottom:border,fontWeight:700,letterSpacing:fs(1)}}>{myBiz.bizNo}</td>
+                </tr>
+                <tr>
+                  <td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:border,borderRight:border}}>상호(명)</td>
+                  <td style={{...b,borderLeft:"none",borderTop:"none",borderBottom:border}}>{myBiz.name}</td>
+                  <td style={{...h,width:fs(45),borderTop:"none",borderBottom:border,borderRight:border}}>성명(인)</td>
+                  <td style={{...b,width:fs(60),borderTop:"none",borderBottom:border,textAlign:"center"}}>{myBiz.ceo||""}</td>
+                </tr>
+                <tr>
+                  <td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:border,borderRight:border}}>사업장주소</td>
+                  <td colSpan={3} style={{...b,borderLeft:"none",borderTop:"none",borderBottom:border,fontSize:fs(9)}}>{myBiz.addr}</td>
+                </tr>
+                <tr>
+                  <td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:"none",borderRight:border}}>업태</td>
+                  <td style={{...b,borderLeft:"none",borderTop:"none",borderBottom:"none"}}>{myBiz.업태}</td>
+                  <td style={{...h,borderTop:"none",borderBottom:"none",borderRight:border}}>종목</td>
+                  <td style={{...b,borderTop:"none",borderBottom:"none"}}>{myBiz.종목}</td>
+                </tr>
               </tbody></table>
             </td>
-            <td style={{...hdr,width:fs(40),borderLeft:thickBorder,borderRight:thickBorder,borderBottom:border}}>공<br/>급<br/>받<br/>는<br/>자</td>
-            <td colSpan={3} style={{padding:0,borderBottom:border}}>
+            <td rowSpan={2} style={{...hdr,width:fs(28),borderLeft:thickBorder,borderRight:thickBorder,borderTop:"none",verticalAlign:"middle",letterSpacing:fs(1),fontSize:fs(9),lineHeight:1.5}}>공<br/>급<br/>받<br/>는<br/>자</td>
+            <td style={{padding:0,borderTop:"none"}}>
               <table style={{width:"100%",borderCollapse:"collapse"}}><tbody>
-                <tr><td style={{...h,width:fs(65),borderLeft:"none",borderTop:"none",borderBottom:border}}>등록번호</td><td style={{...b,borderLeft:border,borderTop:"none",borderBottom:border,fontWeight:700}}>{partner?.bizNo||""}</td></tr>
-                <tr><td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:border}}>상호(법인명)</td><td style={{...b,borderLeft:border,borderTop:"none",borderBottom:border}}>{partner?.name||""}</td></tr>
-                <tr><td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:border}}>사업장주소</td><td style={{...b,borderLeft:border,borderTop:"none",borderBottom:border,fontSize:fs(9)}}>{partner?.addr||""}</td></tr>
-                <tr><td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:"none"}}>업태/종목</td><td style={{...b,borderLeft:border,borderTop:"none",borderBottom:"none",fontSize:fs(9)}}>{partner?.업태||""} {partner?.종목?`/ ${partner.종목}`:""}</td></tr>
+                <tr>
+                  <td style={{...h,width:fs(58),borderLeft:"none",borderTop:"none",borderBottom:border,borderRight:border}}>등록번호</td>
+                  <td colSpan={3} style={{...b,borderLeft:"none",borderTop:"none",borderBottom:border,fontWeight:700,letterSpacing:fs(1)}}>{partner?.bizNo||""}</td>
+                </tr>
+                <tr>
+                  <td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:border,borderRight:border}}>상호(명)</td>
+                  <td style={{...b,borderLeft:"none",borderTop:"none",borderBottom:border}}>{partner?.name||""}</td>
+                  <td style={{...h,width:fs(45),borderTop:"none",borderBottom:border,borderRight:border}}>성명(인)</td>
+                  <td style={{...b,width:fs(60),borderTop:"none",borderBottom:border,textAlign:"center"}}>{partner?.ceo||""}</td>
+                </tr>
+                <tr>
+                  <td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:border,borderRight:border}}>사업장주소</td>
+                  <td colSpan={3} style={{...b,borderLeft:"none",borderTop:"none",borderBottom:border,fontSize:fs(9)}}>{partner?.addr||""}</td>
+                </tr>
+                <tr>
+                  <td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:"none",borderRight:border}}>업태</td>
+                  <td style={{...b,borderLeft:"none",borderTop:"none",borderBottom:"none"}}>{partner?.업태||""}</td>
+                  <td style={{...h,borderTop:"none",borderBottom:"none",borderRight:border}}>종목</td>
+                  <td style={{...b,borderTop:"none",borderBottom:"none"}}>{partner?.종목||""}</td>
+                </tr>
               </tbody></table>
             </td>
           </tr>
           <tr>
-            <td style={{...hdr,borderRight:thickBorder,borderBottom:thickBorder}}></td>
-            <td style={{...h,width:fs(55),borderBottom:thickBorder,borderRight:border}}>전화</td>
-            <td style={{...b,borderBottom:thickBorder,borderRight:border,fontSize:fs(9)}}>{myBiz.tel}</td>
-            <td style={{...b,borderBottom:thickBorder,borderRight:thickBorder,fontSize:fs(9),textAlign:"right"}}><span style={{fontWeight:700}}>팩스</span> {myBiz.fax}</td>
-            <td style={{...hdr,borderLeft:thickBorder,borderRight:thickBorder,borderBottom:thickBorder}}></td>
-            <td style={{...h,width:fs(55),borderBottom:thickBorder,borderRight:border}}>전화</td>
-            <td style={{...b,borderBottom:thickBorder,borderRight:border,fontSize:fs(9)}}>{partner?.tel||""}</td>
-            <td style={{...b,borderBottom:thickBorder,fontSize:fs(9),textAlign:"right"}}><span style={{fontWeight:700}}>팩스</span> {partner?.fax||""}</td>
+            <td style={{padding:0,borderRight:thickBorder,borderTop:border}}>
+              <table style={{width:"100%",borderCollapse:"collapse"}}><tbody>
+                <tr>
+                  <td style={{...h,width:fs(58),borderLeft:"none",borderTop:"none",borderBottom:"none",borderRight:border}}>전화</td>
+                  <td style={{...b,borderLeft:"none",borderTop:"none",borderBottom:"none",fontSize:fs(9)}}>{myBiz.tel}</td>
+                  <td style={{...h,width:fs(45),borderTop:"none",borderBottom:"none",borderRight:border}}>팩스</td>
+                  <td style={{...b,width:fs(60),borderTop:"none",borderBottom:"none",fontSize:fs(9)}}>{myBiz.fax}</td>
+                </tr>
+              </tbody></table>
+            </td>
+            <td style={{padding:0,borderTop:border}}>
+              <table style={{width:"100%",borderCollapse:"collapse"}}><tbody>
+                <tr>
+                  <td style={{...h,width:fs(58),borderLeft:"none",borderTop:"none",borderBottom:"none",borderRight:border}}>전화</td>
+                  <td style={{...b,borderLeft:"none",borderTop:"none",borderBottom:"none",fontSize:fs(9)}}>{partner?.tel||""}</td>
+                  <td style={{...h,width:fs(45),borderTop:"none",borderBottom:"none",borderRight:border}}>팩스</td>
+                  <td style={{...b,width:fs(60),borderTop:"none",borderBottom:"none",fontSize:fs(9)}}>{partner?.fax||""}</td>
+                </tr>
+              </tbody></table>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -651,9 +700,10 @@ const StatementPreview = ({stmt,partner,myBiz,half}) => {
             const sup=it?it.qty*it.unitPrice:0;
             const tax=it&&hasVat?Math.round(sup*0.1):0;
             const bg=i%2===1?"#eef2fb":"#fff";
+            const nameSpec=it?(it.spec?`${it.name} / ${it.spec}`:it.name):"";
             const vals=it
-              ?(hasVat?[i+1,it.name,it.spec,it.unit,fmt(it.qty),fmt(it.unitPrice),fmt(sup),fmt(tax),it.note||""]
-                      :[i+1,it.name,it.spec,it.unit,fmt(it.qty),fmt(it.unitPrice),fmt(sup),it.note||""])
+              ?(hasVat?[monthDay,nameSpec,it.unit,fmt(it.qty),fmt(it.unitPrice),fmt(sup),fmt(tax),it.note||""]
+                      :[monthDay,nameSpec,it.unit,fmt(it.qty),fmt(it.unitPrice),fmt(sup),it.note||""])
               :Array(cols.length).fill("");
             return(
               <tr key={i} style={{background:bg,borderBottom:i===TOTAL_ROWS-1?thickBorder:border}}>
@@ -669,18 +719,18 @@ const StatementPreview = ({stmt,partner,myBiz,half}) => {
           <tr>
             <td style={{...h,width:fs(70),borderLeft:"none",borderTop:"none"}}>공급가액</td>
             <td style={{...b,borderTop:"none",textAlign:"right",fontWeight:700}}>{fmt(stmt.supplyTotal)}</td>
-            {hasVat&&<><td style={{...h,width:fs(55),borderTop:"none"}}>부 가 세</td><td style={{...b,borderTop:"none",textAlign:"right",fontWeight:700}}>{fmt(stmt.vatTotal)}</td></>}
+            {hasVat&&<><td style={{...h,width:fs(55),borderTop:"none"}}>부가세</td><td style={{...b,borderTop:"none",textAlign:"right",fontWeight:700}}>{fmt(stmt.vatTotal)}</td></>}
             <td style={{...h,width:fs(60),borderTop:"none"}}>공급합계</td>
             <td style={{...b,borderTop:"none",textAlign:"right",fontWeight:800}}>{fmt(stmt.grandTotal)}</td>
-            <td style={{...h,width:fs(40),borderTop:"none"}}>비고</td>
+            <td style={{...h,width:fs(50),borderTop:"none"}}>비고</td>
             <td style={{...b,borderTop:"none",borderRight:"none"}}>{stmt.memo||""}</td>
           </tr>
           <tr>
             <td style={{...h,borderLeft:"none",borderBottom:"none",borderTop:border}}>전미수금</td>
             <td style={{...b,borderBottom:"none",borderTop:border,textAlign:"right"}}></td>
-            <td style={{...h,borderBottom:"none",borderTop:border}}>담 금 액</td>
+            <td style={{...h,borderBottom:"none",borderTop:border}}>담금액</td>
             <td style={{...b,borderBottom:"none",borderTop:border,textAlign:"right"}}></td>
-            <td style={{...h,borderBottom:"none",borderTop:border}}>송미수금</td>
+            <td style={{...h,borderBottom:"none",borderTop:border}}>총미수금</td>
             <td style={{...b,borderBottom:"none",borderTop:border,textAlign:"right"}}></td>
             <td style={{...h,borderBottom:"none",borderTop:border}}>인수자</td>
             <td style={{...b,borderBottom:"none",borderTop:border,borderRight:"none"}}></td>
@@ -1375,15 +1425,25 @@ function doAutoBackup(allData){
 }
 // Google Drive 백업 유틸
 async function getGDriveToken(){
-  // 저장된 토큰 사용 또는 재인증
-  if(window.__gAccessToken)return window.__gAccessToken;
+  // 저장된 토큰이 유효한지 빠르게 검증
+  if(window.__gAccessToken){
+    try{
+      const check=await fetch('https://www.googleapis.com/drive/v3/about?fields=user',{headers:{Authorization:'Bearer '+window.__gAccessToken}});
+      if(check.ok)return window.__gAccessToken;
+    }catch(e){}
+    window.__gAccessToken=null;
+  }
+  // 재인증으로 새 토큰 발급
   try{
     const user=__auth.currentUser;
     if(!user)return null;
     const provider=new firebase.auth.GoogleAuthProvider();
     provider.addScope('https://www.googleapis.com/auth/drive.file');
     const result=await user.reauthenticateWithPopup(provider);
-    if(result.credential){window.__gAccessToken=result.credential.accessToken;return result.credential.accessToken;}
+    if(result.credential&&result.credential.accessToken){
+      window.__gAccessToken=result.credential.accessToken;
+      return result.credential.accessToken;
+    }
   }catch(e){console.warn('Drive 토큰 오류:',e);}
   return null;
 }
@@ -1391,6 +1451,7 @@ async function getOrCreateDriveFolder(token){
   // LocalERP_백업 폴더 찾기 또는 생성
   const searchUrl='https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent("name='LocalERP_백업' and mimeType='application/vnd.google-apps.folder' and trashed=false")+'&fields=files(id,name)';
   const res=await fetch(searchUrl,{headers:{Authorization:'Bearer '+token}});
+  if(!res.ok){console.warn('Drive 폴더 검색 실패:',res.status,await res.text());return null;}
   const data=await res.json();
   if(data.files&&data.files.length>0)return data.files[0].id;
   // 폴더 생성
@@ -1398,36 +1459,41 @@ async function getOrCreateDriveFolder(token){
     method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
     body:JSON.stringify({name:'LocalERP_백업',mimeType:'application/vnd.google-apps.folder'})
   });
+  if(!createRes.ok){console.warn('Drive 폴더 생성 실패:',createRes.status,await createRes.text());return null;}
   const folder=await createRes.json();
   return folder.id;
 }
 async function doCloudBackup(allData){
   const token=await getGDriveToken();
-  if(!token)return null;
+  if(!token)throw new Error('Google 인증이 필요합니다. 다시 로그인해 주세요.');
   const ts=new Date();
   const dateKey=ts.getFullYear()+String(ts.getMonth()+1).padStart(2,"0")+String(ts.getDate()).padStart(2,"0");
   const fileName=`localerp_백업_${dateKey}.json`;
   const payload={__version:BACKUP_VERSION,__date:ts.toISOString(),__app:"LocalERP",__auto:true,...allData};
   const folderId=await getOrCreateDriveFolder(token);
+  if(!folderId)throw new Error('Google Drive 폴더 생성 실패');
   // 같은 날짜 파일이 있으면 덮어쓰기
   const existRes=await fetch('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(`name='${fileName}' and '${folderId}' in parents and trashed=false`)+'&fields=files(id)',{headers:{Authorization:'Bearer '+token}});
+  if(!existRes.ok){const err=await existRes.text();throw new Error('파일 검색 실패: '+err);}
   const existData=await existRes.json();
   const content=JSON.stringify(payload,null,2);
-  const blob=new Blob([content],{type:'application/json'});
   if(existData.files&&existData.files.length>0){
     // 기존 파일 업데이트
-    await fetch('https://www.googleapis.com/upload/drive/v3/files/'+existData.files[0].id+'?uploadType=media',{
-      method:'PATCH',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:blob
+    const upRes=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+existData.files[0].id+'?uploadType=media',{
+      method:'PATCH',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:content
     });
+    if(!upRes.ok){const err=await upRes.text();throw new Error('파일 업데이트 실패: '+err);}
   }else{
-    // 새 파일 생성 (multipart)
+    // 새 파일 생성 (multipart/related)
+    const boundary='localerp_backup_boundary';
     const metadata=JSON.stringify({name:fileName,parents:[folderId]});
-    const form=new FormData();
-    form.append('metadata',new Blob([metadata],{type:'application/json'}));
-    form.append('file',blob);
-    await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
-      method:'POST',headers:{Authorization:'Bearer '+token},body:form
+    const body='--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+metadata+'\r\n--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+content+'\r\n--'+boundary+'--';
+    const createRes=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
+      method:'POST',
+      headers:{Authorization:'Bearer '+token,'Content-Type':'multipart/related; boundary='+boundary},
+      body:body
     });
+    if(!createRes.ok){const err=await createRes.text();throw new Error('파일 생성 실패: '+err);}
   }
   return ts.toISOString();
 }
