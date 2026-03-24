@@ -578,43 +578,116 @@ const PrintModal = ({children,onClose,title,allowDuplex,renderHalf}) => {
 };
 
 const StatementPreview = ({stmt,partner,myBiz,half}) => {
-  const sc=half?0.72:1;
-  const fs=n=>n*sc;
-  const b={border:"1px solid #333",padding:`${fs(3)}px ${fs(5)}px`,fontSize:fs(11),lineHeight:1.3};
-  const h={...b,background:"#e8eaf6",fontWeight:700,textAlign:"center"};
-  const emptyRows=half?Math.max(0,4-stmt.items.length):Math.max(0,8-stmt.items.length);
+  const sc=half?0.68:1;
+  const fs=n=>Math.round(n*sc);
+  const TOTAL_ROWS=half?7:12;
+  const ROW_H=fs(22);
+  const hasVat=stmt.includeVat!==false;
+  // 셀 스타일
+  const border="1px solid #999";
+  const thickBorder="1px solid #333";
+  const b={border,padding:`0 ${fs(4)}px`,fontSize:fs(10.5),lineHeight:1,height:ROW_H,boxSizing:"border-box",verticalAlign:"middle"};
+  const h={...b,border:thickBorder,background:"#dde8f5",fontWeight:700,textAlign:"center",fontSize:fs(10)};
+  const hdr={...b,border:thickBorder,background:"#dde8f5",fontWeight:700,textAlign:"center",writingMode:"initial"};
+  // 행 데이터: 실제 품목 + 빈 행으로 TOTAL_ROWS 채우기
+  const rows=Array.from({length:TOTAL_ROWS},(_, i)=>stmt.items[i]||null);
+  const cols=hasVat
+    ?[{label:"No",w:fs(24),align:"center"},{label:"품목명",w:"auto",align:"left"},{label:"규격",w:fs(60),align:"center"},{label:"단위",w:fs(30),align:"center"},{label:"수량",w:fs(36),align:"right"},{label:"단가",w:fs(72),align:"right"},{label:"공급가액",w:fs(80),align:"right"},{label:"세액",w:fs(68),align:"right"},{label:"비고",w:fs(52),align:"left"}]
+    :[{label:"No",w:fs(24),align:"center"},{label:"품목명",w:"auto",align:"left"},{label:"규격",w:fs(60),align:"center"},{label:"단위",w:fs(30),align:"center"},{label:"수량",w:fs(36),align:"right"},{label:"단가",w:fs(72),align:"right"},{label:"금액",w:fs(80),align:"right"},{label:"비고",w:fs(52),align:"left"}];
   return (
-    <div style={{width:"100%",maxWidth:half?undefined:780,margin:"0 auto",fontFamily:"'Malgun Gothic',sans-serif",color:"#000",boxSizing:"border-box"}}>
-      <div style={{textAlign:"center",fontSize:fs(20),fontWeight:800,borderBottom:`${half?2:3}px double #333`,paddingBottom:fs(6),marginBottom:fs(8)}}>거 래 명 세 서</div>
-      <div style={{display:"flex",gap:fs(10),marginBottom:fs(8)}}>
-        <div style={{flex:1}}><table style={{width:"100%",borderCollapse:"collapse"}}><tbody>
-          <tr><td style={{...h,width:fs(55)}}>공급자</td><td colSpan={3} style={{...b,fontWeight:700,textAlign:"center"}}>{myBiz.name}</td></tr>
-          <tr><td style={h}>사업자번호</td><td style={b}>{myBiz.bizNo}</td><td style={{...h,width:fs(45)}}>대표자</td><td style={b}>{myBiz.ceo}</td></tr>
-          <tr><td style={h}>주소</td><td colSpan={3} style={b}>{myBiz.addr}</td></tr>
-          <tr><td style={h}>업태</td><td style={b}>{myBiz.업태}</td><td style={h}>종목</td><td style={b}>{myBiz.종목}</td></tr>
-          <tr><td style={h}>TEL</td><td style={b}>{myBiz.tel}</td><td style={h}>FAX</td><td style={b}>{myBiz.fax}</td></tr>
-        </tbody></table></div>
-        <div style={{flex:1}}><table style={{width:"100%",borderCollapse:"collapse"}}><tbody>
-          <tr><td style={{...h,width:fs(55)}}>수 신</td><td colSpan={3} style={{...b,fontWeight:700,textAlign:"center"}}>{partner?.name||""}</td></tr>
-          <tr><td style={h}>사업자번호</td><td style={b}>{partner?.bizNo||""}</td><td style={{...h,width:fs(45)}}>대표자</td><td style={b}>{partner?.ceo||""}</td></tr>
-          <tr><td style={h}>주소</td><td colSpan={3} style={b}>{partner?.addr||""}</td></tr>
-          <tr><td style={h}>업태</td><td style={b}>{partner?.업태||""}</td><td style={h}>종목</td><td style={b}>{partner?.종목||""}</td></tr>
-          <tr><td style={h}>TEL</td><td style={b}>{partner?.tel||""}</td><td style={h}>E-mail</td><td style={{...b,wordBreak:"break-all"}}>{partner?.email||""}</td></tr>
-        </tbody></table></div>
+    <div style={{width:"100%",margin:"0 auto",fontFamily:"'Malgun Gothic','맑은 고딕',sans-serif",color:"#000",boxSizing:"border-box"}}>
+      {/* 제목 */}
+      <div style={{textAlign:"center",fontSize:fs(half?16:20),fontWeight:800,letterSpacing:fs(4),border:thickBorder,borderBottom:"none",padding:`${fs(5)}px 0`,background:"#fff"}}>
+        거 래 명 세 서
+        <span style={{fontSize:fs(9),fontWeight:400,marginLeft:fs(6),letterSpacing:0}}>(공급자 보관용)</span>
       </div>
-      <table style={{width:"100%",borderCollapse:"collapse",marginBottom:fs(6)}}>
-        <thead><tr>{(stmt.includeVat!==false?["No","품목명","규격","수량","단위","단가","공급가액","세액","비고"]:["No","품목명","규격","수량","단위","단가","금액","비고"]).map((t,i)=><th key={i} style={{...h}}>{t}</th>)}</tr></thead>
+      {/* 공급자 / 수신 */}
+      <table style={{width:"100%",borderCollapse:"collapse",border:thickBorder,marginBottom:0,tableLayout:"fixed"}}>
         <tbody>
-          {stmt.items.map((it,i)=>{const sup=it.qty*it.unitPrice;const tax=stmt.includeVat!==false?Math.round(sup*0.1):0;return(<tr key={i}><td style={{...b,textAlign:"center"}}>{i+1}</td><td style={b}>{it.name}</td><td style={{...b,textAlign:"center"}}>{it.spec}</td><td style={{...b,textAlign:"right"}}>{fmt(it.qty)}</td><td style={{...b,textAlign:"center"}}>{it.unit}</td><td style={{...b,textAlign:"right"}}>{fmt(it.unitPrice)}</td><td style={{...b,textAlign:"right"}}>{fmt(sup)}</td>{stmt.includeVat!==false&&<td style={{...b,textAlign:"right"}}>{fmt(tax)}</td>}<td style={b}>{it.note}</td></tr>);})}
-          {Array.from({length:emptyRows}).map((_,i)=><tr key={"e"+i}>{Array(stmt.includeVat!==false?9:8).fill(0).map((_,j)=><td key={j} style={{...b,height:fs(20)}}>&nbsp;</td>)}</tr>)}
+          <tr>
+            <td style={{...hdr,width:fs(40),borderRight:thickBorder,borderBottom:border}}>공<br/>급<br/>자</td>
+            <td colSpan={3} style={{padding:0,borderRight:thickBorder,borderBottom:border}}>
+              <table style={{width:"100%",borderCollapse:"collapse"}}><tbody>
+                <tr><td style={{...h,width:fs(65),borderLeft:"none",borderTop:"none",borderBottom:border}}>등록번호</td><td style={{...b,borderLeft:border,borderTop:"none",borderBottom:border,fontWeight:700}}>{myBiz.bizNo}</td></tr>
+                <tr><td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:border}}>상호(법인명)</td><td style={{...b,borderLeft:border,borderTop:"none",borderBottom:border}}>{myBiz.name}</td></tr>
+                <tr><td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:border}}>사업장주소</td><td style={{...b,borderLeft:border,borderTop:"none",borderBottom:border,fontSize:fs(9)}}>{myBiz.addr}</td></tr>
+                <tr><td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:"none"}}>업태/종목</td><td style={{...b,borderLeft:border,borderTop:"none",borderBottom:"none",fontSize:fs(9)}}>{myBiz.업태} / {myBiz.종목}</td></tr>
+              </tbody></table>
+            </td>
+            <td style={{...hdr,width:fs(40),borderLeft:thickBorder,borderRight:thickBorder,borderBottom:border}}>공<br/>급<br/>받<br/>는<br/>자</td>
+            <td colSpan={3} style={{padding:0,borderBottom:border}}>
+              <table style={{width:"100%",borderCollapse:"collapse"}}><tbody>
+                <tr><td style={{...h,width:fs(65),borderLeft:"none",borderTop:"none",borderBottom:border}}>등록번호</td><td style={{...b,borderLeft:border,borderTop:"none",borderBottom:border,fontWeight:700}}>{partner?.bizNo||""}</td></tr>
+                <tr><td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:border}}>상호(법인명)</td><td style={{...b,borderLeft:border,borderTop:"none",borderBottom:border}}>{partner?.name||""}</td></tr>
+                <tr><td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:border}}>사업장주소</td><td style={{...b,borderLeft:border,borderTop:"none",borderBottom:border,fontSize:fs(9)}}>{partner?.addr||""}</td></tr>
+                <tr><td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:"none"}}>업태/종목</td><td style={{...b,borderLeft:border,borderTop:"none",borderBottom:"none",fontSize:fs(9)}}>{partner?.업태||""} {partner?.종목?`/ ${partner.종목}`:""}</td></tr>
+              </tbody></table>
+            </td>
+          </tr>
+          <tr>
+            <td style={{...hdr,borderRight:thickBorder,borderBottom:thickBorder}}></td>
+            <td style={{...h,width:fs(55),borderBottom:thickBorder,borderRight:border}}>전화</td>
+            <td style={{...b,borderBottom:thickBorder,borderRight:border,fontSize:fs(9)}}>{myBiz.tel}</td>
+            <td style={{...b,borderBottom:thickBorder,borderRight:thickBorder,fontSize:fs(9),textAlign:"right"}}><span style={{fontWeight:700}}>팩스</span> {myBiz.fax}</td>
+            <td style={{...hdr,borderLeft:thickBorder,borderRight:thickBorder,borderBottom:thickBorder}}></td>
+            <td style={{...h,width:fs(55),borderBottom:thickBorder,borderRight:border}}>전화</td>
+            <td style={{...b,borderBottom:thickBorder,borderRight:border,fontSize:fs(9)}}>{partner?.tel||""}</td>
+            <td style={{...b,borderBottom:thickBorder,fontSize:fs(9),textAlign:"right"}}><span style={{fontWeight:700}}>팩스</span> {partner?.fax||""}</td>
+          </tr>
         </tbody>
       </table>
-      <table style={{width:"100%",borderCollapse:"collapse",marginBottom:fs(6)}}><tbody><tr>
-        <td style={{...h,width:fs(90)}}>공급가액</td><td style={{...b,textAlign:"right",fontWeight:700}}>{fmt(stmt.supplyTotal)}</td>
-        {stmt.includeVat!==false&&<><td style={{...h,width:fs(70)}}>부가세</td><td style={{...b,textAlign:"right",fontWeight:700}}>{fmt(stmt.vatTotal)}</td></>}
-        <td style={{...h,width:fs(70)}}>총 합계</td><td style={{...b,textAlign:"right",fontWeight:800,fontSize:fs(13)}}>{fmt(stmt.grandTotal)}</td>
-      </tr></tbody></table>
-      <div style={{textAlign:"center",fontSize:fs(11),fontWeight:700,padding:fs(6),borderTop:"2px solid #333"}}>합계금액: {toHanja(stmt.grandTotal)}</div>
+      {/* 품목 테이블 */}
+      <table style={{width:"100%",borderCollapse:"collapse",border:thickBorder,borderTop:"none",tableLayout:"fixed"}}>
+        <thead>
+          <tr style={{borderBottom:thickBorder}}>
+            {cols.map((c,i)=><th key={i} style={{...h,width:c.w,borderLeft:i===0?"none":border,borderRight:"none",borderTop:"none",borderBottom:thickBorder,height:fs(20)}}>{c.label}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((it,i)=>{
+            const sup=it?it.qty*it.unitPrice:0;
+            const tax=it&&hasVat?Math.round(sup*0.1):0;
+            const bg=i%2===1?"#eef2fb":"#fff";
+            const vals=it
+              ?(hasVat?[i+1,it.name,it.spec,it.unit,fmt(it.qty),fmt(it.unitPrice),fmt(sup),fmt(tax),it.note||""]
+                      :[i+1,it.name,it.spec,it.unit,fmt(it.qty),fmt(it.unitPrice),fmt(sup),it.note||""])
+              :Array(cols.length).fill("");
+            return(
+              <tr key={i} style={{background:bg,borderBottom:i===TOTAL_ROWS-1?thickBorder:border}}>
+                {cols.map((c,j)=><td key={j} style={{...b,border:"none",borderLeft:j===0?"none":border,borderBottom:i===TOTAL_ROWS-1?thickBorder:border,textAlign:c.align,fontWeight:j===0&&it?"400":"400",height:ROW_H,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{vals[j]}</td>)}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {/* 합계 행 */}
+      <table style={{width:"100%",borderCollapse:"collapse",border:thickBorder,borderTop:"none",tableLayout:"fixed"}}>
+        <tbody>
+          <tr>
+            <td style={{...h,width:fs(70),borderLeft:"none",borderTop:"none"}}>공급가액</td>
+            <td style={{...b,borderTop:"none",textAlign:"right",fontWeight:700}}>{fmt(stmt.supplyTotal)}</td>
+            {hasVat&&<><td style={{...h,width:fs(55),borderTop:"none"}}>부 가 세</td><td style={{...b,borderTop:"none",textAlign:"right",fontWeight:700}}>{fmt(stmt.vatTotal)}</td></>}
+            <td style={{...h,width:fs(60),borderTop:"none"}}>공급합계</td>
+            <td style={{...b,borderTop:"none",textAlign:"right",fontWeight:800}}>{fmt(stmt.grandTotal)}</td>
+            <td style={{...h,width:fs(40),borderTop:"none"}}>비고</td>
+            <td style={{...b,borderTop:"none",borderRight:"none"}}>{stmt.memo||""}</td>
+          </tr>
+          <tr>
+            <td style={{...h,borderLeft:"none",borderBottom:"none",borderTop:border}}>전미수금</td>
+            <td style={{...b,borderBottom:"none",borderTop:border,textAlign:"right"}}></td>
+            <td style={{...h,borderBottom:"none",borderTop:border}}>담 금 액</td>
+            <td style={{...b,borderBottom:"none",borderTop:border,textAlign:"right"}}></td>
+            <td style={{...h,borderBottom:"none",borderTop:border}}>송미수금</td>
+            <td style={{...b,borderBottom:"none",borderTop:border,textAlign:"right"}}></td>
+            <td style={{...h,borderBottom:"none",borderTop:border}}>인수자</td>
+            <td style={{...b,borderBottom:"none",borderTop:border,borderRight:"none"}}></td>
+          </tr>
+        </tbody>
+      </table>
+      {/* 합계금액 한글 */}
+      <div style={{textAlign:"center",fontSize:fs(10.5),fontWeight:700,padding:`${fs(4)}px 0`,border:thickBorder,borderTop:"none"}}>
+        합계금액: {toHanja(stmt.grandTotal)}
+      </div>
     </div>
   );
 };
