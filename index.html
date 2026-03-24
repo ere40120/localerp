@@ -1432,110 +1432,33 @@ function doAutoBackup(allData){
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`localerp_백업_${tag}.json`;a.click();
   return ts.toISOString();
 }
-// Google Drive 백업 유틸
-function clearGDriveToken(){window.__gAccessToken=null;try{sessionStorage.removeItem('gDriveToken');}catch(e){}}
-function getGDriveToken(){
-  // 메모리 → sessionStorage 순서로 토큰 확인 (팝업 없음)
-  if(window.__gAccessToken)return window.__gAccessToken;
-  try{const stored=sessionStorage.getItem('gDriveToken');if(stored){window.__gAccessToken=stored;return stored;}}catch(e){}
-  return null;
-}
-async function getDriveTokenWithPopup() {
-  // Google Identity Services(GIS)로 Drive 토큰 취득
-  const GIS_CLIENT_ID = '645935434160-67ivtu4ea93d97fkjuicq63u85m80rkv.apps.googleusercontent.com';
-  return new Promise((resolve, reject) => {
-    if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
-      reject(new Error('Google Identity Services가 로드되지 않았습니다. 잠시 후 다시 시도해 주세요.'));
-      return;
-    }
-    const tokenClient = window.google.accounts.oauth2.initTokenClient({
-      client_id: GIS_CLIENT_ID,
-      scope: 'https://www.googleapis.com/auth/drive.file',
-      callback: (response) => {
-        if (response.error) {
-          reject(new Error(response.error_description || response.error));
-        } else {
-          const token = response.access_token;
-          window.__gAccessToken = token;
-          try { sessionStorage.setItem('gDriveToken', token); } catch(e) {}
-          resolve(token);
-        }
-      }
-    });
-    tokenClient.requestAccessToken({ prompt: '' });
-  });
-}
-
-async function driveFetch(url,options){
-  const res=await fetch(url,options);
-  if(res.status===401||res.status===403){clearGDriveToken();throw new Error('Google Drive 권한이 만료되었습니다. 로그아웃 후 다시 Google로 로그인해 주세요.');}
-  return res;
-}
-async function getOrCreateDriveFolder(token){
-  const searchUrl='https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent("name='LocalERP_백업' and mimeType='application/vnd.google-apps.folder' and trashed=false")+'&fields=files(id,name)';
-  const res=await driveFetch(searchUrl,{headers:{Authorization:'Bearer '+token}});
-  if(!res.ok)throw new Error('Drive 폴더 검색 실패');
-  const data=await res.json();
-  if(data.files&&data.files.length>0)return data.files[0].id;
-  const createRes=await driveFetch('https://www.googleapis.com/drive/v3/files',{
-    method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
-    body:JSON.stringify({name:'LocalERP_백업',mimeType:'application/vnd.google-apps.folder'})
-  });
-  if(!createRes.ok)throw new Error('Drive 폴더 생성 실패');
-  const folder=await createRes.json();
-  return folder.id;
-}
+// Firebase RTDB 클라우드 백업 유틸
 async function doCloudBackup(allData){
-  const token=getGDriveToken();
-  if(!token)throw new Error('Google Drive 권한이 없습니다. 로그아웃 후 다시 Google로 로그인해 주세요.');
+  if(!_useFirebase||!__uid||__uid==='local')throw new Error('로그인이 필요합니다.');
   const ts=new Date();
-  const dateKey=ts.getFullYear()+String(ts.getMonth()+1).padStart(2,"0")+String(ts.getDate()).padStart(2,"0");
-  const fileName=`localerp_백업_${dateKey}.json`;
-  const payload={__version:BACKUP_VERSION,__date:ts.toISOString(),__app:"LocalERP",__auto:true,...allData};
-  const folderId=await getOrCreateDriveFolder(token);
-  // 같은 날짜 파일이 있으면 덮어쓰기
-  const existRes=await driveFetch('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(`name='${fileName}' and '${folderId}' in parents and trashed=false`)+'&fields=files(id)',{headers:{Authorization:'Bearer '+token}});
-  if(!existRes.ok)throw new Error('파일 검색 실패');
-  const existData=await existRes.json();
-  const content=JSON.stringify(payload,null,2);
-  if(existData.files&&existData.files.length>0){
-    const upRes=await driveFetch('https://www.googleapis.com/upload/drive/v3/files/'+existData.files[0].id+'?uploadType=media',{
-      method:'PATCH',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:content
-    });
-    if(!upRes.ok)throw new Error('파일 업데이트 실패');
-  }else{
-    const boundary='localerp_backup_boundary';
-    const metadata=JSON.stringify({name:fileName,parents:[folderId]});
-    const body='--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+metadata+'\r\n--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+content+'\r\n--'+boundary+'--';
-    const createRes=await driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
-      method:'POST',
-      headers:{Authorization:'Bearer '+token,'Content-Type':'multipart/related; boundary='+boundary},
-      body:body
-    });
-    if(!createRes.ok)throw new Error('파일 생성 실패');
-  }
+  const dateKey=ts.getFullYear()+String(ts.getMonth()+1).padStart(2,'0')+String(ts.getDate()).padStart(2,'0');
+  const payload={__version:BACKUP_VERSION,__date:ts.toISOString(),__app:'LocalERP',...allData};
+  await __db.ref('users/'+__uid+'/backups/'+dateKey).set(payload);
   return ts.toISOString();
 }
 async function listCloudBackups(){
-  const token=getGDriveToken();
-  if(!token)return[];
-  try{
-    const folderId=await getOrCreateDriveFolder(token);
-    const res=await driveFetch('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(`'${folderId}' in parents and trashed=false`)+'&orderBy=name+desc&fields=files(id,name,createdTime,size)',{headers:{Authorization:'Bearer '+token}});
-    const data=await res.json();
-    return(data.files||[]).map(f=>({id:f.id,key:f.name.replace('localerp_백업_','').replace('.json',''),name:f.name,date:f.createdTime,size:f.size}));
-  }catch(e){console.warn(e);return[];}
+  if(!_useFirebase||!__uid||__uid==='local')return[];
+  const snap=await __db.ref('users/'+__uid+'/backups').orderByKey().limitToLast(30).once('value');
+  const val=snap.val();
+  if(!val)return[];
+  return Object.entries(val).map(([key,data])=>({
+    id:key,key:key,
+    name:'localerp_백업_'+key,
+    date:data.__date||key,
+    size:null
+  })).reverse();
 }
 async function downloadCloudBackup(fileId){
-  const token=getGDriveToken();
-  if(!token)throw new Error('Google Drive 권한이 없습니다. 로그아웃 후 다시 로그인해 주세요.');
-  const res=await driveFetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media',{headers:{Authorization:'Bearer '+token}});
-  return await res.json();
+  const snap=await __db.ref('users/'+__uid+'/backups/'+fileId).once('value');
+  return snap.val();
 }
 async function deleteCloudBackup(fileId){
-  const token=getGDriveToken();
-  if(!token)return false;
-  await driveFetch('https://www.googleapis.com/drive/v3/files/'+fileId,{method:'DELETE',headers:{Authorization:'Bearer '+token}});
+  await __db.ref('users/'+__uid+'/backups/'+fileId).remove();
   return true;
 }
 function todayStr(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
@@ -1554,32 +1477,13 @@ const BackupRestore = ({partners,vouchers,statements,taxInvoices,products,partne
   const [cloudLoading,setCloudLoading]=useState(false);
   const [cloudError,setCloudError]=useState("");
   const loadCloudBackups=async()=>{
-    setCloudLoading(true);setCloudError("");
-    const token=getGDriveToken();
-    if(!token){ setCloudError("no_token"); setCloudBackups([]); setCloudLoading(false); return; }
-    try{
-      const list=await listCloudBackups();
-      setCloudBackups(list);
-    }catch(e){
-      setCloudError("Google Drive 접근 실패. 다시 로그인이 필요합니다.");
-    }
+    setCloudLoading(true);setCloudError('');
+    try{const list=await listCloudBackups();setCloudBackups(list);}catch(e){setCloudError('백업 목록 로드 실패: '+e.message);}
     setCloudLoading(false);
-  };
-  const connectGDriveAndLoad=async()=>{
-    setCloudLoading(true);setCloudError("");
-    try {
-      await getDriveTokenWithPopup();
-      loadCloudBackups();
-    } catch(e) {
-      setCloudError("Google 계정 연결 실패: " + e.message);
-      setCloudLoading(false);
-    }
   };
   useEffect(()=>{if(!localMode)loadCloudBackups();},[localMode]);
   const doCloudBackupNow=async()=>{
-    const token=getGDriveToken();
-    if(!token){ setCloudError("no_token"); return; }
-    try{const ts=await doCloudBackup(allData);if(ts){setDoneMsg("Google Drive에 백업 완료!");setTimeout(()=>setDoneMsg(""),3000);loadCloudBackups();}}catch(e){setCloudError("백업 실패: "+e.message);}
+    try{const ts=await doCloudBackup(allData);if(ts){setDoneMsg('서버에 백업 완료!');setTimeout(()=>setDoneMsg(''),3000);loadCloudBackups();}}catch(e){setCloudError('백업 실패: '+e.message);}
   };
   const restoreFromCloud=async(backup)=>{
     setCloudLoading(true);
@@ -1739,7 +1643,7 @@ const BackupRestore = ({partners,vouchers,statements,taxInvoices,products,partne
           </table>
         </div>
       ) : null}
-      <div style={{fontSize:11,color:"#999",marginTop:8}}>백업 파일은 Google Drive의 "LocalERP_백업" 폴더에 저장됩니다</div>
+      <div style={{fontSize:11,color:"#999",marginTop:8}}>백업은 Firebase 서버에 날짜별로 저장됩니다 (최대 30개)</div>
     </div>
     )}
 
@@ -1767,7 +1671,7 @@ const BackupRestore = ({partners,vouchers,statements,taxInvoices,products,partne
         <div style={{background:"#e8f5e9",border:"1px solid #81c784",borderRadius:8,padding:"12px 16px",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
           <CheckCircle size={16} color="#2e7d32"/>
           <div style={{fontSize:12.5,color:"#2e7d32",lineHeight:1.6}}>
-            <strong>Google Drive 클라우드에 연동 중</strong> — 데이터가 실시간 저장되며, 매일 자정에 날짜별 스냅샷이 Google Drive에 백업됩니다. 백업 파일은 직접 관리할 수 있습니다.
+            <strong>Firebase 클라우드에 연동 중</strong> — 데이터가 실시간 저장되며, 매일 자정에 날짜별 스냅샷이 서버에 백업됩니다. 백업 파일은 직접 관리할 수 있습니다.
           </div>
         </div>
       )}
@@ -1777,7 +1681,7 @@ const BackupRestore = ({partners,vouchers,statements,taxInvoices,products,partne
             <Clock size={16} color="#6a1b9a"/>자동 백업 (매일 0시)
           </div>
           <div style={{fontSize:12,color:"#666",lineHeight:1.6,marginBottom:8}}>
-            {localMode?"앱이 열려 있을 때 매일 자정(00:00~00:05)에 백업 파일을 다운로드합니다.":"매일 자정에 Google Drive에 스냅샷이 저장됩니다. (파일 다운로드 없음)"}
+            {localMode?"앱이 열려 있을 때 매일 자정(00:00~00:05)에 백업 파일을 다운로드합니다.":"매일 자정에 Firebase 서버에 스냅샷이 저장됩니다. (파일 다운로드 없음)"}
           </div>
           {lastAutoBackup&&(
             <div style={{fontSize:11,color:"#888",display:"flex",alignItems:"center",gap:5}}>
