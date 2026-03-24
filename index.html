@@ -253,7 +253,11 @@ function LoginScreen({onLogin, onLocalMode}) {
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       const result = await __auth.signInWithPopup(provider);
       // Google Drive 접근용 토큰 저장 (sessionStorage로 새로고침 후에도 유지)
-      if(result.credential&&result.credential.accessToken){window.__gAccessToken=result.credential.accessToken;try{sessionStorage.setItem('gDriveToken',result.credential.accessToken);}catch(e){}}
+      // Firebase v9 compat: credentialFromResult 또는 result.credential 둘 다 시도
+      let _at=null;
+      try{const cred=firebase.auth.GoogleAuthProvider.credentialFromResult(result);if(cred&&cred.accessToken)_at=cred.accessToken;}catch(e){}
+      if(!_at&&result.credential&&result.credential.accessToken)_at=result.credential.accessToken;
+      if(_at){window.__gAccessToken=_at;try{sessionStorage.setItem('gDriveToken',_at);}catch(e){}}
     } catch(e) {
       if (e.code !== 'auth/popup-closed-by-user') {
         setErr(errMap[e.code] || e.message);
