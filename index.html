@@ -1447,7 +1447,7 @@ async function getDriveTokenWithPopup() {
   let result;
   try {
     if (__auth.currentUser && __auth.currentUser.providerData.some(p => p.providerId === 'google.com')) {
-      result = await __auth.currentUser.reauthenticateWithPopup(provider);
+      result = await __auth.signInWithPopup(provider);
     } else if (__auth.currentUser) {
       result = await __auth.currentUser.linkWithPopup(provider);
     } else {
