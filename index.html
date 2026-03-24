@@ -1592,9 +1592,9 @@ const BackupRestore = ({partners,vouchers,statements,taxInvoices,products,partne
     <div style={{...S.card,padding:20,marginBottom:12}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
         <div style={{fontSize:15,fontWeight:700,color:"#1a1a2e",display:"flex",alignItems:"center",gap:7}}>
-          <HardDrive size={16} color="#4285F4"/>
-          <svg width="18" height="18" viewBox="0 0 87.3 78" style={{marginRight:-2}}><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3L29 52.7H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066DA"/><path d="m43.65 25-15.25 26.4 15.25 26.4h30.5L58.9 51.4 43.65 25z" fill="#00AC47"/><path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75L86.1 57.2c.8-1.4 1.2-2.95 1.2-4.5H58.9L73.55 76.8z" fill="#EA4335"/><path d="M43.65 25 29 1.6C27.65 2.4 26.5 3.5 25.7 4.9L1.2 47.6C.4 49 0 50.55 0 52.1h29z" fill="#00832D"/><path d="m58.9 25H29l14.65 25.4L58.9 25z" fill="#2684FC"/><path d="M87.3 52.1 73.55 1.6C72.75.2 71.6-.9 70.25-1.7L43.65 25 58.9 52.1z" fill="#FFBA00"/></svg>
-          Google Drive 백업
+          <HardDrive size={16} color="#FF6F00"/>
+          <svg width="18" height="18" viewBox="0 0 32 32" style={{marginRight:-2}}><path d="M19.62 11.558l-3.203 2.98-2.972-5.995 1.538-3.448c.4-.7 1.024-.692 1.414 0z" fill="#FFA000"/><path d="M13.445 8.543l2.972 5.995-11.97 11.135z" fill="#F57F17"/><path d="M23.123 7.003c.572-.55 1.164-.362 1.315.417l2.484 14.437-8.297 4.924c-.552.315-1.44.305-1.99 0l-8.637-4.92z" fill="#FFCA28"/><path d="M4.447 25.673l7.735-14.827 3.463 6.136z" fill="#FFA000"/></svg>
+          Firebase 클라우드 백업
         </div>
         <button onClick={loadCloudBackups} disabled={cloudLoading} style={{...S.btnSec,fontSize:11,padding:"5px 12px",display:"flex",alignItems:"center",gap:4}}>
           <RotateCcw size={12}/>{cloudLoading?"불러오는 중...":"새로고침"}
