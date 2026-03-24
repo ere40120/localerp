@@ -252,8 +252,8 @@ function LoginScreen({onLogin, onLocalMode}) {
       const provider = new firebase.auth.GoogleAuthProvider();
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       const result = await __auth.signInWithPopup(provider);
-      // Google Drive 접근용 토큰 저장
-      if(result.credential){window.__gAccessToken=result.credential.accessToken;}
+      // Google Drive 접근용 토큰 저장 (sessionStorage로 새로고침 후에도 유지)
+      if(result.credential&&result.credential.accessToken){window.__gAccessToken=result.credential.accessToken;try{sessionStorage.setItem('gDriveToken',result.credential.accessToken);}catch(e){}}
     } catch(e) {
       if (e.code !== 'auth/popup-closed-by-user') {
         setErr(errMap[e.code] || e.message);
@@ -1427,99 +1427,83 @@ function doAutoBackup(allData){
   return ts.toISOString();
 }
 // Google Drive 백업 유틸
-async function getGDriveToken(){
-  // 저장된 토큰이 유효한지 빠르게 검증
-  if(window.__gAccessToken){
-    try{
-      const check=await fetch('https://www.googleapis.com/drive/v3/about?fields=user',{headers:{Authorization:'Bearer '+window.__gAccessToken}});
-      if(check.ok)return window.__gAccessToken;
-    }catch(e){}
-    window.__gAccessToken=null;
-  }
-  // 재인증으로 새 토큰 발급
-  try{
-    const user=__auth.currentUser;
-    if(!user)return null;
-    const provider=new firebase.auth.GoogleAuthProvider();
-    provider.addScope('https://www.googleapis.com/auth/drive.file');
-    const result=await user.reauthenticateWithPopup(provider);
-    if(result.credential&&result.credential.accessToken){
-      window.__gAccessToken=result.credential.accessToken;
-      return result.credential.accessToken;
-    }
-  }catch(e){console.warn('Drive 토큰 오류:',e);}
+function clearGDriveToken(){window.__gAccessToken=null;try{sessionStorage.removeItem('gDriveToken');}catch(e){}}
+function getGDriveToken(){
+  // 메모리 → sessionStorage 순서로 토큰 확인 (팝업 없음)
+  if(window.__gAccessToken)return window.__gAccessToken;
+  try{const stored=sessionStorage.getItem('gDriveToken');if(stored){window.__gAccessToken=stored;return stored;}}catch(e){}
   return null;
 }
+async function driveFetch(url,options){
+  const res=await fetch(url,options);
+  if(res.status===401||res.status===403){clearGDriveToken();throw new Error('Google Drive 권한이 만료되었습니다. 로그아웃 후 다시 Google로 로그인해 주세요.');}
+  return res;
+}
 async function getOrCreateDriveFolder(token){
-  // LocalERP_백업 폴더 찾기 또는 생성
   const searchUrl='https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent("name='LocalERP_백업' and mimeType='application/vnd.google-apps.folder' and trashed=false")+'&fields=files(id,name)';
-  const res=await fetch(searchUrl,{headers:{Authorization:'Bearer '+token}});
-  if(!res.ok){console.warn('Drive 폴더 검색 실패:',res.status,await res.text());return null;}
+  const res=await driveFetch(searchUrl,{headers:{Authorization:'Bearer '+token}});
+  if(!res.ok)throw new Error('Drive 폴더 검색 실패');
   const data=await res.json();
   if(data.files&&data.files.length>0)return data.files[0].id;
-  // 폴더 생성
-  const createRes=await fetch('https://www.googleapis.com/drive/v3/files',{
+  const createRes=await driveFetch('https://www.googleapis.com/drive/v3/files',{
     method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
     body:JSON.stringify({name:'LocalERP_백업',mimeType:'application/vnd.google-apps.folder'})
   });
-  if(!createRes.ok){console.warn('Drive 폴더 생성 실패:',createRes.status,await createRes.text());return null;}
+  if(!createRes.ok)throw new Error('Drive 폴더 생성 실패');
   const folder=await createRes.json();
   return folder.id;
 }
 async function doCloudBackup(allData){
-  const token=await getGDriveToken();
-  if(!token)throw new Error('Google 인증이 필요합니다. 다시 로그인해 주세요.');
+  const token=getGDriveToken();
+  if(!token)throw new Error('Google Drive 권한이 없습니다. 로그아웃 후 다시 Google로 로그인해 주세요.');
   const ts=new Date();
   const dateKey=ts.getFullYear()+String(ts.getMonth()+1).padStart(2,"0")+String(ts.getDate()).padStart(2,"0");
   const fileName=`localerp_백업_${dateKey}.json`;
   const payload={__version:BACKUP_VERSION,__date:ts.toISOString(),__app:"LocalERP",__auto:true,...allData};
   const folderId=await getOrCreateDriveFolder(token);
-  if(!folderId)throw new Error('Google Drive 폴더 생성 실패');
   // 같은 날짜 파일이 있으면 덮어쓰기
-  const existRes=await fetch('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(`name='${fileName}' and '${folderId}' in parents and trashed=false`)+'&fields=files(id)',{headers:{Authorization:'Bearer '+token}});
-  if(!existRes.ok){const err=await existRes.text();throw new Error('파일 검색 실패: '+err);}
+  const existRes=await driveFetch('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(`name='${fileName}' and '${folderId}' in parents and trashed=false`)+'&fields=files(id)',{headers:{Authorization:'Bearer '+token}});
+  if(!existRes.ok)throw new Error('파일 검색 실패');
   const existData=await existRes.json();
   const content=JSON.stringify(payload,null,2);
   if(existData.files&&existData.files.length>0){
-    // 기존 파일 업데이트
-    const upRes=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+existData.files[0].id+'?uploadType=media',{
+    const upRes=await driveFetch('https://www.googleapis.com/upload/drive/v3/files/'+existData.files[0].id+'?uploadType=media',{
       method:'PATCH',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:content
     });
-    if(!upRes.ok){const err=await upRes.text();throw new Error('파일 업데이트 실패: '+err);}
+    if(!upRes.ok)throw new Error('파일 업데이트 실패');
   }else{
-    // 새 파일 생성 (multipart/related)
     const boundary='localerp_backup_boundary';
     const metadata=JSON.stringify({name:fileName,parents:[folderId]});
     const body='--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+metadata+'\r\n--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+content+'\r\n--'+boundary+'--';
-    const createRes=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
+    const createRes=await driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
       method:'POST',
       headers:{Authorization:'Bearer '+token,'Content-Type':'multipart/related; boundary='+boundary},
       body:body
     });
-    if(!createRes.ok){const err=await createRes.text();throw new Error('파일 생성 실패: '+err);}
+    if(!createRes.ok)throw new Error('파일 생성 실패');
   }
   return ts.toISOString();
 }
 async function listCloudBackups(){
-  const token=await getGDriveToken();
+  const token=getGDriveToken();
   if(!token)return[];
   try{
     const folderId=await getOrCreateDriveFolder(token);
-    const res=await fetch('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(`'${folderId}' in parents and trashed=false`)+'&orderBy=name+desc&fields=files(id,name,createdTime,size)',{headers:{Authorization:'Bearer '+token}});
+    const res=await driveFetch('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(`'${folderId}' in parents and trashed=false`)+'&orderBy=name+desc&fields=files(id,name,createdTime,size)',{headers:{Authorization:'Bearer '+token}});
     const data=await res.json();
     return(data.files||[]).map(f=>({id:f.id,key:f.name.replace('localerp_백업_','').replace('.json',''),name:f.name,date:f.createdTime,size:f.size}));
   }catch(e){console.warn(e);return[];}
 }
 async function downloadCloudBackup(fileId){
-  const token=await getGDriveToken();
-  if(!token)return null;
-  const res=await fetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media',{headers:{Authorization:'Bearer '+token}});
+  const token=getGDriveToken();
+  if(!token)throw new Error('Google Drive 권한이 없습니다. 로그아웃 후 다시 로그인해 주세요.');
+  const res=await driveFetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media',{headers:{Authorization:'Bearer '+token}});
   return await res.json();
 }
 async function deleteCloudBackup(fileId){
-  const token=await getGDriveToken();
+  const token=getGDriveToken();
   if(!token)return false;
-  await fetch('https://www.googleapis.com/drive/v3/files/'+fileId,{method:'DELETE',headers:{Authorization:'Bearer '+token}});
+  await driveFetch('https://www.googleapis.com/drive/v3/files/'+fileId,{method:'DELETE',headers:{Authorization:'Bearer '+token}});
   return true;
 }
 function todayStr(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
