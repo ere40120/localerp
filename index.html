@@ -603,10 +603,10 @@ const StatementPreview = ({stmt,partner,myBiz,half}) => {
         </tbody></table></div>
       </div>
       <table style={{width:"100%",borderCollapse:"collapse",marginBottom:fs(6)}}>
-        <thead><tr>{["No","품목명","규격","수량","단위","단가","공급가액","비고"].map((t,i)=><th key={i} style={{...h}}>{t}</th>)}</tr></thead>
+        <thead><tr>{(stmt.includeVat!==false?["No","품목명","규격","수량","단위","단가","공급가액","세액","비고"]:["No","품목명","규격","수량","단위","단가","금액","비고"]).map((t,i)=><th key={i} style={{...h}}>{t}</th>)}</tr></thead>
         <tbody>
-          {stmt.items.map((it,i)=><tr key={i}><td style={{...b,textAlign:"center"}}>{i+1}</td><td style={b}>{it.name}</td><td style={{...b,textAlign:"center"}}>{it.spec}</td><td style={{...b,textAlign:"right"}}>{fmt(it.qty)}</td><td style={{...b,textAlign:"center"}}>{it.unit}</td><td style={{...b,textAlign:"right"}}>{fmt(it.unitPrice)}</td><td style={{...b,textAlign:"right"}}>{fmt(it.qty*it.unitPrice)}</td><td style={b}>{it.note}</td></tr>)}
-          {Array.from({length:emptyRows}).map((_,i)=><tr key={"e"+i}>{Array(8).fill(0).map((_,j)=><td key={j} style={{...b,height:fs(20)}}>&nbsp;</td>)}</tr>)}
+          {stmt.items.map((it,i)=>{const sup=it.qty*it.unitPrice;const tax=stmt.includeVat!==false?Math.round(sup*0.1):0;return(<tr key={i}><td style={{...b,textAlign:"center"}}>{i+1}</td><td style={b}>{it.name}</td><td style={{...b,textAlign:"center"}}>{it.spec}</td><td style={{...b,textAlign:"right"}}>{fmt(it.qty)}</td><td style={{...b,textAlign:"center"}}>{it.unit}</td><td style={{...b,textAlign:"right"}}>{fmt(it.unitPrice)}</td><td style={{...b,textAlign:"right"}}>{fmt(sup)}</td>{stmt.includeVat!==false&&<td style={{...b,textAlign:"right"}}>{fmt(tax)}</td>}<td style={b}>{it.note}</td></tr>);})}
+          {Array.from({length:emptyRows}).map((_,i)=><tr key={"e"+i}>{Array(stmt.includeVat!==false?9:8).fill(0).map((_,j)=><td key={j} style={{...b,height:fs(20)}}>&nbsp;</td>)}</tr>)}
         </tbody>
       </table>
       <table style={{width:"100%",borderCollapse:"collapse",marginBottom:fs(6)}}><tbody><tr>
@@ -790,17 +790,20 @@ const StatementPage = ({statements,setStatements,partners,myBiz,products,partner
         </div>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",marginBottom:8,fontSize:12}}>
-            <thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["품목","품목명","수량","단가","금액",""].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead>
-            <tbody>{form.items.map((it,i)=>(
+            <thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["품목","품목명","규격","수량","단위","단가","공급가액","세액",""].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead>
+            <tbody>{form.items.map((it,i)=>{const sup=it.qty*it.unitPrice;const tax=form.includeVat?Math.round(sup*0.1):0;return(
               <tr key={i} style={{borderBottom:"1px solid #f0f0f0"}}>
-                <td style={{padding:4,minWidth:120}}><select value={it.productId||""} onChange={e=>selectProduct(i,e.target.value)} style={{...S.select,fontSize:11,padding:"4px 4px"}}><option value="">직접입력</option>{products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></td>
-                <td style={{padding:4,minWidth:100}}><input value={it.name} onChange={e=>updateItem(i,"name",e.target.value)} style={{...S.input,fontSize:11}}/></td>
-                <td style={{padding:4,width:55}}><input type="number" value={it.qty} onChange={e=>updateItem(i,"qty",e.target.value)} style={{...S.input,fontSize:11,textAlign:"right"}}/></td>
-                <td style={{padding:4,width:100}}><input type="number" value={it.unitPrice} onChange={e=>updateItem(i,"unitPrice",e.target.value)} style={{...S.input,fontSize:11,textAlign:"right"}}/></td>
-                <td style={{padding:4,width:90,textAlign:"right",fontWeight:600}}>{fmt(it.qty*it.unitPrice)}</td>
+                <td style={{padding:4,minWidth:110}}><select value={it.productId||""} onChange={e=>selectProduct(i,e.target.value)} style={{...S.select,fontSize:11,padding:"4px 4px"}}><option value="">직접입력</option>{products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></td>
+                <td style={{padding:4,minWidth:90}}><input value={it.name} onChange={e=>updateItem(i,"name",e.target.value)} style={{...S.input,fontSize:11}}/></td>
+                <td style={{padding:4,width:80}}><input value={it.spec||""} onChange={e=>updateItem(i,"spec",e.target.value)} style={{...S.input,fontSize:11}}/></td>
+                <td style={{padding:4,width:50}}><input type="number" value={it.qty} onChange={e=>updateItem(i,"qty",e.target.value)} style={{...S.input,fontSize:11,textAlign:"right"}}/></td>
+                <td style={{padding:4,width:50}}><input value={it.unit||""} onChange={e=>updateItem(i,"unit",e.target.value)} style={{...S.input,fontSize:11,textAlign:"center"}}/></td>
+                <td style={{padding:4,width:95}}><input type="number" value={it.unitPrice} onChange={e=>updateItem(i,"unitPrice",e.target.value)} style={{...S.input,fontSize:11,textAlign:"right"}}/></td>
+                <td style={{padding:4,width:85,textAlign:"right",fontWeight:600}}>{fmt(sup)}</td>
+                <td style={{padding:4,width:75,textAlign:"right",color:form.includeVat?"#c62828":"#bbb"}}>{fmt(tax)}</td>
                 <td style={{padding:4,width:28}}><button onClick={()=>removeItem(i)} style={{background:"none",border:"none",cursor:"pointer"}}><Trash2 size={13} color="#d32f2f"/></button></td>
               </tr>
-            ))}</tbody>
+            );})}</tbody>
           </table>
         </div>
         <button onClick={addItem} style={{...S.btnSec,fontSize:12,marginBottom:12,display:"flex",alignItems:"center",gap:4}}><Plus size={13}/> 품목 추가</button>
@@ -1539,6 +1542,8 @@ function App({user}) {
   // 자동 백업 타이머: 매분 체크, 0시~0시 5분이고 오늘 아직 안 했으면 실행
   const autoBackupRef=useRef({partners,vouchers,statements,taxInvoices,products,partnerPrices,myBiz,menuOrder,hiddenMenus});
   useEffect(()=>{autoBackupRef.current={partners,vouchers,statements,taxInvoices,products,partnerPrices,myBiz,menuOrder,hiddenMenus};},[partners,vouchers,statements,taxInvoices,products,partnerPrices,myBiz,menuOrder,hiddenMenus]);
+  const lastAutoBackupRef=useRef(lastAutoBackup);
+  useEffect(()=>{lastAutoBackupRef.current=lastAutoBackup;},[lastAutoBackup]);
 
   useEffect(()=>{
     if(!autoBackup)return;
@@ -1546,17 +1551,19 @@ function App({user}) {
       const n=new Date();const h=n.getHours();const m=n.getMinutes();
       if(h===0&&m<=5){
         const today=todayStr();
-        const lastDate=lastAutoBackup?lastAutoBackup.slice(0,10):"";
+        // ref로 최신값 참조 + 로컬 날짜 기준 비교 (타임존 버그 수정)
+        const last=lastAutoBackupRef.current;
+        const lastDate=last?new Date(last).toLocaleDateString("sv-SE"):"";
         if(lastDate!==today){
           const ts=doAutoBackup(autoBackupRef.current);
+          lastAutoBackupRef.current=ts; // ref 먼저 업데이트로 중복 방지
           setLastAutoBackup(ts);
         }
       }
     };
-    check();
     const iv=setInterval(check,60000);
     return ()=>clearInterval(iv);
-  },[autoBackup,lastAutoBackup]);
+  },[autoBackup]);
 
   const page=()=>{switch(menu){
     case "dashboard": return <Dashboard vouchers={vouchers} accounts={accounts} statements={statements} taxInvoices={taxInvoices}/>;
