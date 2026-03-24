@@ -553,8 +553,9 @@ const Sidebar = ({activeMenu,setActiveMenu,menuOrder,setMenuOrder,hiddenMenus,se
   );
 };
 
-const PrintModal = ({children,onClose,title,allowDuplex,renderHalf}) => {
-  const [duplex,setDuplex]=useState(false);
+const PrintModal = ({children,onClose,title,allowDuplex,renderHalf,defaultDuplex,onDuplexChange}) => {
+  const [duplex,setDuplex]=useState(defaultDuplex||false);
+  const handleDuplexChange=(v)=>{setDuplex(v);if(onDuplexChange)onDuplexChange(v);};
   return (
   <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center"}}>
     <style>{printCSS}{duplex?`@media print{@page{margin:5mm 8mm}}`:""}</style>
@@ -562,7 +563,7 @@ const PrintModal = ({children,onClose,title,allowDuplex,renderHalf}) => {
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 20px",borderBottom:"1px solid #eee",flexWrap:"wrap",gap:8}}>
         <span style={{fontWeight:700,fontSize:15}}>{title} 미리보기</span>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          {allowDuplex&&<label style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"#555",cursor:"pointer",padding:"6px 10px",background:duplex?"#e3f2fd":"#f5f5f5",border:duplex?"1px solid #90caf9":"1px solid #ddd",borderRadius:6}}><input type="checkbox" checked={duplex} onChange={e=>setDuplex(e.target.checked)} style={{width:14,height:14,cursor:"pointer"}}/>A4 2장 인쇄</label>}
+          {allowDuplex&&<label style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"#555",cursor:"pointer",padding:"6px 10px",background:duplex?"#e3f2fd":"#f5f5f5",border:duplex?"1px solid #90caf9":"1px solid #ddd",borderRadius:6}}><input type="checkbox" checked={duplex} onChange={e=>handleDuplexChange(e.target.checked)} style={{width:14,height:14,cursor:"pointer"}}/>A4 2장 인쇄</label>}
           <button onClick={()=>window.print()} style={{...S.btn,background:"#2e7d32"}}><Printer size={14}/> 인쇄</button>
           <button onClick={onClose} style={S.btnSec}><X size={14}/> 닫기</button>
         </div>
@@ -583,7 +584,7 @@ const PrintModal = ({children,onClose,title,allowDuplex,renderHalf}) => {
 const StatementPreview = ({stmt,partner,myBiz,half}) => {
   const sc=half?0.68:1;
   const fs=n=>Math.round(n*sc);
-  const TOTAL_ROWS=half?7:12;
+  const TOTAL_ROWS=half?18:30;
   const ROW_H=fs(22);
   const hasVat=stmt.includeVat!==false;
   // 날짜 파싱 (월일 표시용)
@@ -719,7 +720,7 @@ const StatementPreview = ({stmt,partner,myBiz,half}) => {
           <tr>
             <td style={{...h,width:fs(70),borderLeft:"none",borderTop:"none"}}>공급가액</td>
             <td style={{...b,borderTop:"none",textAlign:"right",fontWeight:700}}>{fmt(stmt.supplyTotal)}</td>
-            {hasVat&&<><td style={{...h,width:fs(55),borderTop:"none"}}>부가세</td><td style={{...b,borderTop:"none",textAlign:"right",fontWeight:700}}>{fmt(stmt.vatTotal)}</td></>}
+            {hasVat&&<><td style={{...h,width:fs(60),borderTop:"none"}}>부가가치세</td><td style={{...b,borderTop:"none",textAlign:"right",fontWeight:700}}>{fmt(stmt.vatTotal)}</td></>}
             <td style={{...h,width:fs(60),borderTop:"none"}}>공급합계</td>
             <td style={{...b,borderTop:"none",textAlign:"right",fontWeight:800}}>{fmt(stmt.grandTotal)}</td>
             <td style={{...h,width:fs(50),borderTop:"none"}}>비고</td>
@@ -728,7 +729,7 @@ const StatementPreview = ({stmt,partner,myBiz,half}) => {
           <tr>
             <td style={{...h,borderLeft:"none",borderBottom:"none",borderTop:border}}>전미수금</td>
             <td style={{...b,borderBottom:"none",borderTop:border,textAlign:"right"}}></td>
-            <td style={{...h,borderBottom:"none",borderTop:border}}>담금액</td>
+            <td style={{...h,borderBottom:"none",borderTop:border}}>입금액</td>
             <td style={{...b,borderBottom:"none",borderTop:border,textAlign:"right"}}></td>
             <td style={{...h,borderBottom:"none",borderTop:border}}>총미수금</td>
             <td style={{...b,borderBottom:"none",borderTop:border,textAlign:"right"}}></td>
@@ -890,6 +891,8 @@ const StatementPage = ({statements,setStatements,partners,myBiz,products,partner
   const emptyForm={date:today,partnerId:"",items:[{...emptyItem}],dueDate:"",payTerms:"월말 결제",memo:"",includeVat:lastVatRef.current};
   const [form,setForm]=useState(emptyForm);const [editId,setEditId]=useState(null);const [preview,setPreview]=useState(null);const [mode,setMode]=useState("list");
   const [viewMode,setViewMode]=useState("all");const [filterPartner,setFilterPartner]=useState("");const [filterDateFrom,setFilterDateFrom]=useState("");const [filterDateTo,setFilterDateTo]=useState("");
+  const [stmtDuplex,setStmtDuplex]=useState(()=>{try{return JSON.parse(localStorage.getItem("stmtDuplexPref"))||false;}catch{return false;}});
+  const onStmtDuplexChange=(v)=>{setStmtDuplex(v);try{localStorage.setItem("stmtDuplexPref",JSON.stringify(v));}catch{}};
   const getPrice=(prodId,partnerId)=>{if(partnerId&&partnerPrices[partnerId]&&partnerPrices[partnerId][prodId]!=null)return partnerPrices[partnerId][prodId];const prod=products.find(p=>p.id===prodId);return prod?prod.basePrice:0;};
   const calcTotals=(items,includeVat=true)=>{const sup=items.reduce((s,it)=>s+(it.qty*it.unitPrice),0);const vat=includeVat?Math.round(sup*0.1):0;return{supplyTotal:sup,vatTotal:vat,grandTotal:sup+vat};};
   const selectProduct=(idx,prodId)=>{const prod=products.find(p=>p.id===prodId);if(!prod)return;const price=getPrice(prodId,form.partnerId);const items=[...form.items];items[idx]={...items[idx],productId:prodId,name:prod.name,spec:prod.spec,unit:prod.unit,unitPrice:price};setForm({...form,items});};
@@ -943,7 +946,7 @@ const StatementPage = ({statements,setStatements,partners,myBiz,products,partner
           <button onClick={handleSubmit} style={S.btn}><Check size={14}/> {editId?"수정":"발행"}</button>
         </div>
       </div>
-      {preview&&<PrintModal title="거래명세서" onClose={()=>setPreview(null)} allowDuplex renderHalf={()=><StatementPreview stmt={preview.data} partner={preview.partner} myBiz={myBiz} half/>}><StatementPreview stmt={preview.data} partner={preview.partner} myBiz={myBiz}/></PrintModal>}
+      {preview&&<PrintModal title="거래명세서" onClose={()=>setPreview(null)} allowDuplex defaultDuplex={stmtDuplex} onDuplexChange={onStmtDuplexChange} renderHalf={()=><StatementPreview stmt={preview.data} partner={preview.partner} myBiz={myBiz} half/>}><StatementPreview stmt={preview.data} partner={preview.partner} myBiz={myBiz}/></PrintModal>}
     </div>
   );
   return (
@@ -977,7 +980,7 @@ const StatementPage = ({statements,setStatements,partners,myBiz,products,partner
         </table>
         {!filteredStatements.length&&<div style={{padding:40,textAlign:"center",color:"#999"}}>거래명세서가 없습니다.</div>}
       </div>
-      {preview&&<PrintModal title="거래명세서" onClose={()=>setPreview(null)} allowDuplex renderHalf={()=><StatementPreview stmt={preview.data} partner={preview.partner} myBiz={myBiz} half/>}><StatementPreview stmt={preview.data} partner={preview.partner} myBiz={myBiz}/></PrintModal>}
+      {preview&&<PrintModal title="거래명세서" onClose={()=>setPreview(null)} allowDuplex defaultDuplex={stmtDuplex} onDuplexChange={onStmtDuplexChange} renderHalf={()=><StatementPreview stmt={preview.data} partner={preview.partner} myBiz={myBiz} half/>}><StatementPreview stmt={preview.data} partner={preview.partner} myBiz={myBiz}/></PrintModal>}
     </div>
   );
 };
