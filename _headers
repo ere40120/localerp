@@ -1,5 +1,7 @@
 /
+  Cross-Origin-Opener-Policy: unsafe-none
   Content-Type: text/html; charset=utf-8
 
 /index.html
+  Cross-Origin-Opener-Policy: unsafe-none
   Content-Type: text/html; charset=utf-8
