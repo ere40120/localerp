@@ -251,6 +251,7 @@ function LoginScreen({onLogin, onLocalMode}) {
     try {
       const provider = new firebase.auth.GoogleAuthProvider();
       provider.addScope('https://www.googleapis.com/auth/drive.file');
+      provider.setCustomParameters({prompt:'consent',access_type:'offline'});
       const result = await __auth.signInWithPopup(provider);
       // Google Drive 접근용 토큰 저장 (sessionStorage로 새로고침 후에도 유지)
       // Firebase v9 compat: credentialFromResult 또는 result.credential 둘 다 시도
