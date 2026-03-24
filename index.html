@@ -1441,31 +1441,34 @@ function getGDriveToken(){
   return null;
 }
 async function getDriveTokenWithPopup() {
-  // Google Identity Services(GIS) 방식으로 Drive 토큰 취득 (Firebase 팝업보다 안정적)
-  const GIS_CLIENT_ID = '645935434160-67ivtu4ea93d97fkjuicq63u85m80rkv.apps.googleusercontent.com';
-  return new Promise((resolve, reject) => {
-    if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
-      // GIS 스크립트 로드 안 됐으면 fallback
-      reject(new Error('Google Identity Services 라이브러리가 로드되지 않았습니다. 잠시 후 다시 시도해 주세요.'));
-      return;
-    }
-    const tokenClient = window.google.accounts.oauth2.initTokenClient({
-      client_id: GIS_CLIENT_ID,
-      scope: 'https://www.googleapis.com/auth/drive.file',
-      callback: (response) => {
-        if (response.error) {
-          reject(new Error(response.error_description || response.error));
-        } else {
-          const token = response.access_token;
-          window.__gAccessToken = token;
-          try { sessionStorage.setItem('gDriveToken', token); } catch(e) {}
-          resolve(token);
-        }
-      }
-    });
-    tokenClient.requestAccessToken({ prompt: 'consent' });
-  });
+  // Firebase signInWithPopup으로 Drive OAuth 토큰 취득
+  const provider = new firebase.auth.GoogleAuthProvider();
+  provider.addScope('https://www.googleapis.com/auth/drive.file');
+  // offline 제거 - online 방식이 accessToken 반환에 유리
+  provider.setCustomParameters({prompt: 'consent'});
+  const result = await __auth.signInWithPopup(provider);
+  // 토큰 추출 (여러 방법 시도)
+  let token = null;
+  try {
+    const cred = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
+    if (cred && cred.accessToken) token = cred.accessToken;
+  } catch(e) {}
+  if (!token && result.credential && result.credential.accessToken) token = result.credential.accessToken;
+  // 내부 _tokenResponse 시도 (Firebase compat 내부 필드)
+  if (!token) {
+    try {
+      const tr = result._tokenResponse || (result.user && result.user._delegate && result.user._delegate._auth && result.user._delegate._auth._lastAccessToken);
+      if (tr && typeof tr === 'string') token = tr;
+    } catch(e) {}
+  }
+  if (token) {
+    window.__gAccessToken = token;
+    try { sessionStorage.setItem('gDriveToken', token); } catch(e) {}
+    return token;
+  }
+  throw new Error('Google Drive 토큰을 가져오지 못했습니다. 다시 로그아웃 후 Google로 로그인해 주세요.');
 }
+
 async function driveFetch(url,options){
   const res=await fetch(url,options);
   if(res.status===401||res.status===403){clearGDriveToken();throw new Error('Google Drive 권한이 만료되었습니다. 로그아웃 후 다시 Google로 로그인해 주세요.');}
