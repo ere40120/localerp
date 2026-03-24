@@ -41,6 +41,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.24.0/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide-react@0.383.0/dist/umd/lucide-react.js" onerror="console.warn('lucide-react CDN failed')"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script>
     // lucide-react가 로드 실패해도 앱이 작동하도록 SVG 폴백 아이콘 정의
     (function() {
@@ -1440,33 +1441,30 @@ function getGDriveToken(){
   return null;
 }
 async function getDriveTokenWithPopup() {
-  const provider = new firebase.auth.GoogleAuthProvider();
-  provider.addScope('https://www.googleapis.com/auth/drive.file');
-  provider.setCustomParameters({prompt:'consent',access_type:'offline'});
-  
-  let result;
-  try {
-    if (__auth.currentUser && __auth.currentUser.providerData.some(p => p.providerId === 'google.com')) {
-      result = await __auth.signInWithPopup(provider);
-    } else if (__auth.currentUser) {
-      result = await __auth.currentUser.linkWithPopup(provider);
-    } else {
-      result = await __auth.signInWithPopup(provider);
+  // Google Identity Services(GIS) 방식으로 Drive 토큰 취득 (Firebase 팝업보다 안정적)
+  const GIS_CLIENT_ID = '645935434160-67ivtu4ea93d97fkjuicq63u85m80rkv.apps.googleusercontent.com';
+  return new Promise((resolve, reject) => {
+    if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
+      // GIS 스크립트 로드 안 됐으면 fallback
+      reject(new Error('Google Identity Services 라이브러리가 로드되지 않았습니다. 잠시 후 다시 시도해 주세요.'));
+      return;
     }
-  } catch (e) {
-    if (e.code === 'auth/credential-already-in-use') {
-      result = await __auth.signInWithPopup(provider);
-    } else {
-      throw e;
-    }
-  }
-
-  let _at=null;
-  try{const cred=firebase.auth.GoogleAuthProvider.credentialFromResult(result);if(cred&&cred.accessToken)_at=cred.accessToken;}catch(e){}
-  if(!_at&&result.credential&&result.credential.accessToken)_at=result.credential.accessToken;
-  if(_at){window.__gAccessToken=_at;try{sessionStorage.setItem('gDriveToken',_at);}catch(e){}}
-  
-  return _at;
+    const tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: GIS_CLIENT_ID,
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: (response) => {
+        if (response.error) {
+          reject(new Error(response.error_description || response.error));
+        } else {
+          const token = response.access_token;
+          window.__gAccessToken = token;
+          try { sessionStorage.setItem('gDriveToken', token); } catch(e) {}
+          resolve(token);
+        }
+      }
+    });
+    tokenClient.requestAccessToken({ prompt: 'consent' });
+  });
 }
 async function driveFetch(url,options){
   const res=await fetch(url,options);
