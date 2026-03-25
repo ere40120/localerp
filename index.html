@@ -611,17 +611,17 @@ const StatementPreview = ({stmt,partner,myBiz,half}) => {
   return (
     <div style={{width:"100%",margin:"0 auto",fontFamily:"'Malgun Gothic','맑은 고딕',sans-serif",color:"#000",boxSizing:"border-box"}}>
       {/* 제목 */}
-      <div style={{textAlign:"center",fontSize:fs(half?16:20),fontWeight:800,letterSpacing:fs(4),border:thickBorder,borderBottom:"none",padding:`${fs(6)}px ${fs(8)}px`,background:"#fff",position:"relative"}}>
+      <div style={{textAlign:"center",fontSize:fs(half?16:20),fontWeight:800,letterSpacing:fs(4),border:thickBorder,padding:`${fs(6)}px ${fs(8)}px`,background:"#fff",position:"relative"}}>
         거 래 명 세 서
         <span style={{fontSize:fs(9),fontWeight:400,marginLeft:fs(6),letterSpacing:0}}>(공급자 보관용)</span>
         <span style={{position:"absolute",right:fs(10),top:"50%",transform:"translateY(-50%)",fontSize:fs(9),fontWeight:400,letterSpacing:0}}>작성일자: {dateStr}</span>
       </div>
       {/* 공급자 / 공급받는자 */}
-      <table style={{width:"100%",borderCollapse:"collapse",border:thickBorder,borderTop:"none",marginBottom:0,tableLayout:"fixed"}}>
+      <table style={{width:"100%",borderCollapse:"collapse",border:thickBorder,marginBottom:0,tableLayout:"fixed"}}>
         <tbody>
           <tr>
-            <td rowSpan={2} style={{...hdr,width:fs(28),borderRight:thickBorder,borderTop:"none",verticalAlign:"middle",letterSpacing:fs(2),fontSize:fs(10),lineHeight:1.6}}>공<br/>급<br/>자</td>
-            <td style={{padding:0,borderRight:thickBorder,borderTop:"none"}}>
+            <td rowSpan={2} style={{...hdr,width:fs(28),borderRight:thickBorder,verticalAlign:"middle",letterSpacing:fs(2),fontSize:fs(10),lineHeight:1.6}}>공<br/>급<br/>자</td>
+            <td style={{padding:0,borderRight:thickBorder}}>
               <table style={{width:"100%",borderCollapse:"collapse"}}><tbody>
                 <tr>
                   <td style={{...h,width:fs(58),borderLeft:"none",borderTop:"none",borderBottom:border,borderRight:border}}>등록번호</td>
@@ -630,8 +630,8 @@ const StatementPreview = ({stmt,partner,myBiz,half}) => {
                 <tr>
                   <td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:border,borderRight:border}}>상호(명)</td>
                   <td style={{...b,borderLeft:"none",borderTop:"none",borderBottom:border}}>{myBiz.name}</td>
-                  <td style={{...h,width:fs(45),borderTop:"none",borderBottom:border,borderRight:border}}>성명(인)</td>
-                  <td style={{...b,width:fs(60),borderTop:"none",borderBottom:border,textAlign:"center"}}>{myBiz.ceo||""}</td>
+                  <td style={{...h,width:fs(70),borderTop:"none",borderBottom:border,borderRight:border}}>성명(인)</td>
+                  <td style={{...b,width:fs(90),borderTop:"none",borderBottom:border,textAlign:"center"}}>{myBiz.ceo||""}</td>
                 </tr>
                 <tr>
                   <td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:border,borderRight:border}}>사업장주소</td>
@@ -640,13 +640,13 @@ const StatementPreview = ({stmt,partner,myBiz,half}) => {
                 <tr>
                   <td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:"none",borderRight:border}}>업태</td>
                   <td style={{...b,borderLeft:"none",borderTop:"none",borderBottom:"none"}}>{myBiz.업태}</td>
-                  <td style={{...h,borderTop:"none",borderBottom:"none",borderRight:border}}>종목</td>
-                  <td style={{...b,borderTop:"none",borderBottom:"none"}}>{myBiz.종목}</td>
+                  <td style={{...h,width:fs(70),borderTop:"none",borderBottom:"none",borderRight:border}}>종목</td>
+                  <td style={{...b,width:fs(90),borderTop:"none",borderBottom:"none"}}>{myBiz.종목}</td>
                 </tr>
               </tbody></table>
             </td>
-            <td rowSpan={2} style={{...hdr,width:fs(28),borderLeft:thickBorder,borderRight:thickBorder,borderTop:"none",verticalAlign:"middle",letterSpacing:fs(1),fontSize:fs(9),lineHeight:1.5}}>공<br/>급<br/>받<br/>는<br/>자</td>
-            <td style={{padding:0,borderTop:"none"}}>
+            <td rowSpan={2} style={{...hdr,width:fs(28),borderLeft:thickBorder,borderRight:thickBorder,verticalAlign:"middle",letterSpacing:fs(1),fontSize:fs(9),lineHeight:1.5}}>공<br/>급<br/>받<br/>는<br/>자</td>
+            <td style={{padding:0}}>
               <table style={{width:"100%",borderCollapse:"collapse"}}><tbody>
                 <tr>
                   <td style={{...h,width:fs(58),borderLeft:"none",borderTop:"none",borderBottom:border,borderRight:border}}>등록번호</td>
@@ -655,8 +655,8 @@ const StatementPreview = ({stmt,partner,myBiz,half}) => {
                 <tr>
                   <td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:border,borderRight:border}}>상호(명)</td>
                   <td style={{...b,borderLeft:"none",borderTop:"none",borderBottom:border}}>{partner?.name||""}</td>
-                  <td style={{...h,width:fs(45),borderTop:"none",borderBottom:border,borderRight:border}}>성명(인)</td>
-                  <td style={{...b,width:fs(60),borderTop:"none",borderBottom:border,textAlign:"center"}}>{partner?.ceo||""}</td>
+                  <td style={{...h,width:fs(70),borderTop:"none",borderBottom:border,borderRight:border}}>성명(인)</td>
+                  <td style={{...b,width:fs(90),borderTop:"none",borderBottom:border,textAlign:"center"}}>{partner?.ceo||""}</td>
                 </tr>
                 <tr>
                   <td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:border,borderRight:border}}>사업장주소</td>
@@ -665,8 +665,8 @@ const StatementPreview = ({stmt,partner,myBiz,half}) => {
                 <tr>
                   <td style={{...h,borderLeft:"none",borderTop:"none",borderBottom:"none",borderRight:border}}>업태</td>
                   <td style={{...b,borderLeft:"none",borderTop:"none",borderBottom:"none"}}>{partner?.업태||""}</td>
-                  <td style={{...h,borderTop:"none",borderBottom:"none",borderRight:border}}>종목</td>
-                  <td style={{...b,borderTop:"none",borderBottom:"none"}}>{partner?.종목||""}</td>
+                  <td style={{...h,width:fs(70),borderTop:"none",borderBottom:"none",borderRight:border}}>종목</td>
+                  <td style={{...b,width:fs(90),borderTop:"none",borderBottom:"none"}}>{partner?.종목||""}</td>
                 </tr>
               </tbody></table>
             </td>
@@ -677,8 +677,8 @@ const StatementPreview = ({stmt,partner,myBiz,half}) => {
                 <tr>
                   <td style={{...h,width:fs(58),borderLeft:"none",borderTop:"none",borderBottom:"none",borderRight:border}}>전화</td>
                   <td style={{...b,borderLeft:"none",borderTop:"none",borderBottom:"none",fontSize:fs(9)}}>{myBiz.tel}</td>
-                  <td style={{...h,width:fs(45),borderTop:"none",borderBottom:"none",borderRight:border}}>팩스</td>
-                  <td style={{...b,width:fs(60),borderTop:"none",borderBottom:"none",fontSize:fs(9)}}>{myBiz.fax}</td>
+                  <td style={{...h,width:fs(70),borderTop:"none",borderBottom:"none",borderRight:border}}>팩스</td>
+                  <td style={{...b,width:fs(90),borderTop:"none",borderBottom:"none",fontSize:fs(9)}}>{myBiz.fax}</td>
                 </tr>
               </tbody></table>
             </td>
@@ -687,8 +687,8 @@ const StatementPreview = ({stmt,partner,myBiz,half}) => {
                 <tr>
                   <td style={{...h,width:fs(58),borderLeft:"none",borderTop:"none",borderBottom:"none",borderRight:border}}>전화</td>
                   <td style={{...b,borderLeft:"none",borderTop:"none",borderBottom:"none",fontSize:fs(9)}}>{partner?.tel||""}</td>
-                  <td style={{...h,width:fs(45),borderTop:"none",borderBottom:"none",borderRight:border}}>팩스</td>
-                  <td style={{...b,width:fs(60),borderTop:"none",borderBottom:"none",fontSize:fs(9)}}>{partner?.fax||""}</td>
+                  <td style={{...h,width:fs(70),borderTop:"none",borderBottom:"none",borderRight:border}}>팩스</td>
+                  <td style={{...b,width:fs(90),borderTop:"none",borderBottom:"none",fontSize:fs(9)}}>{partner?.fax||""}</td>
                 </tr>
               </tbody></table>
             </td>
@@ -726,7 +726,7 @@ const StatementPreview = ({stmt,partner,myBiz,half}) => {
           <tr>
             <td style={{...h,width:fs(70),borderLeft:"none",borderTop:"none"}}>공급가액</td>
             <td style={{...b,borderTop:"none",textAlign:"right",fontWeight:700}}>{fmt(stmt.supplyTotal)}</td>
-            {hasVat&&<><td style={{...h,width:fs(60),borderTop:"none"}}>부가가치세</td><td style={{...b,borderTop:"none",textAlign:"right",fontWeight:700}}>{fmt(stmt.vatTotal)}</td></>}
+            {hasVat&&<><td style={{...h,width:fs(60),borderTop:"none"}}>부가세</td><td style={{...b,borderTop:"none",textAlign:"right",fontWeight:700}}>{fmt(stmt.vatTotal)}</td></>}
             <td style={{...h,width:fs(60),borderTop:"none"}}>공급합계</td>
             <td style={{...b,borderTop:"none",textAlign:"right",fontWeight:800}}>{fmt(stmt.grandTotal)}</td>
             <td style={{...h,width:fs(50),borderTop:"none"}}>비고</td>
