@@ -820,37 +820,177 @@ const BizSettings = ({myBiz,setMyBiz}) => {
   );
 };
 
+const PRODUCT_XLS_HEADERS=["품목코드","품목명","규격","단위","기본단가","분류"];
+const PRODUCT_KEY_MAP={"품목코드":"code","품목명":"name","규격":"spec","단위":"unit","기본단가":"basePrice","분류":"category"};
+
 const ProductMgmt = ({products,setProducts}) => {
-  const empty={id:"",name:"",spec:"",unit:"개",basePrice:0,category:""};
+  const empty={id:"",code:"",name:"",spec:"",unit:"개",basePrice:0,category:""};
   const [form,setForm]=useState(empty);const [editId,setEditId]=useState(null);
-  const submit=()=>{if(!form.name){alert("품목명을 입력하세요.");return;}if(editId){setProducts(p=>p.map(x=>x.id===editId?{...form}:x));setEditId(null);}else{const nid="PRD"+String(Math.max(0,...products.map(p=>parseInt(p.id.replace("PRD",""))||0))+1).padStart(3,"0");setProducts(p=>[...p,{...form,id:nid,basePrice:Number(form.basePrice)||0}]);}setForm(empty);};
-  return (<div><h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>품목/단가 관리</h2>
+  const [importModal,setImportModal]=useState(false);
+  const [importData,setImportData]=useState([]);
+  const [importError,setImportError]=useState("");
+  const [importMode,setImportMode]=useState("append");
+  const fileRef=useRef(null);
+  const submit=()=>{
+    if(!form.name){alert("품목명을 입력하세요.");return;}
+    const maxNum=Math.max(0,...products.map(p=>parseInt((p.code||p.id).replace(/\D/g,"")||"0")||0));
+    const autoCode="PRD"+String(maxNum+1).padStart(3,"0");
+    const useCode=(form.code||"").trim()||autoCode;
+    const dup=products.find(p=>(p.code||p.id)===useCode&&p.id!==editId);
+    if(dup){alert("이미 사용 중인 품목코드입니다: ["+useCode+"]");return;}
+    if(editId){
+      setProducts(p=>p.map(x=>x.id===editId?{...form,code:useCode,basePrice:Number(form.basePrice)||0}:x));
+      setEditId(null);
+    }else{
+      const nid="PRD"+String(Math.max(0,...products.map(p=>parseInt(p.id.replace("PRD",""))||0))+1).padStart(3,"0");
+      setProducts(p=>[...p,{...form,id:nid,code:useCode,basePrice:Number(form.basePrice)||0}]);
+    }
+    setForm(empty);
+  };
+  const downloadTemplate=()=>{
+    if(!window.XLSX){alert("XLSX 라이브러리가 로드되지 않았습니다.");return;}
+    const ws=XLSX.utils.aoa_to_sheet([PRODUCT_XLS_HEADERS,["A001","웹개발 용역","프론트엔드","식",14000000,"서비스"],["A002","서버 유지보수","월정액","건",4500000,"서비스"]]);
+    ws['!cols']=PRODUCT_XLS_HEADERS.map(h=>({wch:Math.max(h.length*2,14)}));
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"품목목록");XLSX.writeFile(wb,"품목_입력양식.xlsx");
+  };
+  const exportExcel=()=>{
+    if(!window.XLSX){alert("XLSX 라이브러리가 로드되지 않았습니다.");return;}
+    const rows=[PRODUCT_XLS_HEADERS,...products.map(p=>[p.code||p.id,p.name||"",p.spec||"",p.unit||"",p.basePrice||0,p.category||""])];
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=PRODUCT_XLS_HEADERS.map(h=>({wch:Math.max(h.length*2,14)}));
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"품목목록");XLSX.writeFile(wb,"품목목록_내보내기.xlsx");
+  };
+  const handleFileChange=(e)=>{
+    const file=e.target.files[0];if(!file)return;
+    if(!window.XLSX){alert("XLSX 라이브러리가 로드되지 않았습니다.");return;}
+    const reader=new FileReader();
+    reader.onload=(evt)=>{
+      try{
+        const wb=XLSX.read(evt.target.result,{type:"binary"});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+        if(rows.length<2){setImportError("데이터가 없습니다.");setImportData([]);return;}
+        const headers=rows[0].map(h=>String(h).trim());
+        const nameIdx=headers.findIndex(h=>h==="품목명");
+        if(nameIdx<0){setImportError("'품목명' 열을 찾을 수 없습니다. 양식 파일을 사용해주세요.");setImportData([]);return;}
+        const parsed=[];const errs=[];
+        rows.slice(1).forEach((row,ri)=>{
+          if(row.every(c=>c===""||c===null||c===undefined))return;
+          const obj={};
+          headers.forEach((h,i)=>{const k=PRODUCT_KEY_MAP[h];if(k)obj[k]=String(row[i]||"").trim();});
+          if(!obj.name){errs.push(`${ri+2}행: 품목명이 비어있습니다.`);return;}
+          obj.basePrice=Number(obj.basePrice)||0;
+          parsed.push(obj);
+        });
+        if(errs.length>0){setImportError(errs.join("\n"));}else{setImportError("");}
+        setImportData(parsed);setImportModal(true);
+      }catch(err){setImportError("파일 읽기 오류: "+err.message);setImportData([]);setImportModal(true);}
+    };
+    reader.readAsBinaryString(file);e.target.value="";
+  };
+  const confirmImport=()=>{
+    if(importData.length===0)return;
+    if(importMode==="replace"){
+      const withIds=importData.map((obj,i)=>{const nid="PRD"+String(i+1).padStart(3,"0");const code=obj.code||nid;return{...obj,id:nid,code};});
+      setProducts(withIds);
+    }else{
+      setProducts(prev=>{
+        let cur=[...prev];
+        importData.forEach(obj=>{
+          const useCode=obj.code||"";
+          const dup=useCode?cur.find(x=>(x.code||x.id)===useCode):null;
+          if(dup){cur=cur.map(x=>x.id===dup.id?{...dup,...obj,id:dup.id,code:useCode||dup.code||dup.id}:x);}
+          else{
+            const nid="PRD"+String(Math.max(0,...cur.map(x=>parseInt(x.id.replace("PRD",""))||0))+1).padStart(3,"0");
+            const maxN=Math.max(0,...cur.map(x=>parseInt((x.code||x.id).replace(/\D/g,"")||"0")||0));
+            const aCode=obj.code||("PRD"+String(maxN+1).padStart(3,"0"));
+            cur=[...cur,{...obj,id:nid,code:aCode}];
+          }
+        });
+        return cur;
+      });
+    }
+    setImportModal(false);setImportData([]);setImportError("");
+  };
+  return (<div>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
+      <h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e"}}>품목/단가 관리</h2>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <button onClick={downloadTemplate} style={{...S.btn,background:"#546e7a",display:"flex",alignItems:"center",gap:5,fontSize:12}}><FileSpreadsheet size={14}/>양식 다운로드</button>
+        <button onClick={()=>fileRef.current&&fileRef.current.click()} style={{...S.btn,background:"#2e7d32",display:"flex",alignItems:"center",gap:5,fontSize:12}}><Upload size={14}/>엑셀 가져오기</button>
+        <button onClick={exportExcel} style={{...S.btn,background:"#1565c0",display:"flex",alignItems:"center",gap:5,fontSize:12}}><Download size={14}/>엑셀 내보내기</button>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFileChange} style={{display:"none"}}/>
+      </div>
+    </div>
     <div style={{...S.card,padding:18,marginBottom:14}}>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end"}}>
-        <div style={{flex:1,minWidth:140}}><label style={S.label}>품목명</label><input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} style={S.input}/></div>
-        <div style={{flex:"0 0 90px"}}><label style={S.label}>규격</label><input value={form.spec} onChange={e=>setForm({...form,spec:e.target.value})} style={S.input}/></div>
-        <div style={{flex:"0 0 60px"}}><label style={S.label}>단위</label><input value={form.unit} onChange={e=>setForm({...form,unit:e.target.value})} style={S.input}/></div>
-        <div style={{flex:"0 0 130px"}}><label style={S.label}>기본단가</label><input type="number" value={form.basePrice} onChange={e=>setForm({...form,basePrice:e.target.value})} style={{...S.input,textAlign:"right"}}/></div>
-        <div style={{flex:"0 0 90px"}}><label style={S.label}>분류</label><input value={form.category} onChange={e=>setForm({...form,category:e.target.value})} style={S.input}/></div>
+        <div style={{flex:"0 0 130px"}}><label style={S.label}>품목코드<span style={{fontSize:10,color:"#aaa",fontWeight:400,marginLeft:4}}>(없으면 자동)</span></label><input type="text" value={form.code||""} onChange={e=>{const v=e.target.value;setForm(prev=>({...prev,code:v}));}} style={{...S.input,background:"#fff",cursor:"text"}} placeholder="예: A001" autoComplete="off"/></div>
+        <div style={{flex:1,minWidth:140}}><label style={S.label}>품목명</label><input type="text" value={form.name} onChange={e=>{const v=e.target.value;setForm(prev=>({...prev,name:v}));}} style={S.input}/></div>
+        <div style={{flex:"0 0 90px"}}><label style={S.label}>규격</label><input type="text" value={form.spec} onChange={e=>{const v=e.target.value;setForm(prev=>({...prev,spec:v}));}} style={S.input}/></div>
+        <div style={{flex:"0 0 60px"}}><label style={S.label}>단위</label><input type="text" value={form.unit} onChange={e=>{const v=e.target.value;setForm(prev=>({...prev,unit:v}));}} style={S.input}/></div>
+        <div style={{flex:"0 0 130px"}}><label style={S.label}>기본단가</label><input type="number" value={form.basePrice} onChange={e=>{const v=e.target.value;setForm(prev=>({...prev,basePrice:v}));}} style={{...S.input,textAlign:"right"}}/></div>
+        <div style={{flex:"0 0 90px"}}><label style={S.label}>분류</label><input type="text" value={form.category} onChange={e=>{const v=e.target.value;setForm(prev=>({...prev,category:v}));}} style={S.input}/></div>
         <button onClick={submit} style={S.btn}>{editId?<><Check size={14}/> 수정</>:<><Plus size={14}/> 추가</>}</button>
         {editId&&<button onClick={()=>{setForm(empty);setEditId(null);}} style={S.btnSec}>취소</button>}
       </div>
     </div>
     <div style={{...S.card,overflow:"auto"}}>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}>
-        <thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["코드","품목명","규격","단위","기본단가","분류","관리"].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead>
+        <thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["품목코드","품목명","규격","단위","기본단가","분류","관리"].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead>
         <tbody>{products.map(p=>(<tr key={p.id} style={{borderBottom:"1px solid #f0f0f0"}}>
-          <td style={{padding:8,color:"#888"}}>{p.id}</td><td style={{padding:8,fontWeight:500}}>{p.name}</td>
+          <td style={{padding:8,fontWeight:600,color:"#1a237e",fontFamily:"monospace"}}>{p.code||p.id}</td><td style={{padding:8,fontWeight:500}}>{p.name}</td>
           <td style={{padding:8}}>{p.spec}</td><td style={{padding:8,textAlign:"center"}}>{p.unit}</td>
           <td style={{padding:8,textAlign:"right",fontWeight:600,color:"#1565c0"}}>{fmt(p.basePrice)}</td>
           <td style={{padding:8}}><span style={{padding:"2px 7px",borderRadius:4,fontSize:11,background:"#f3e5f5",color:"#7b1fa2"}}>{p.category}</span></td>
           <td style={{padding:8,textAlign:"center"}}>
-            <button onClick={()=>{setForm({...p,basePrice:p.basePrice.toString()});setEditId(p.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Edit3 size={12} color="#666"/></button>
+            <button onClick={()=>{setForm({...p,code:p.code||p.id,basePrice:p.basePrice.toString()});setEditId(p.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Edit3 size={12} color="#666"/></button>
             <button onClick={()=>{if(confirm("삭제?"))setProducts(prev=>prev.filter(x=>x.id!==p.id));}} style={{background:"none",border:"none",cursor:"pointer",padding:2}}><Trash2 size={12} color="#d32f2f"/></button>
           </td>
         </tr>))}</tbody>
       </table>
     </div>
+    {importModal&&(
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"#fff",borderRadius:12,padding:24,width:600,maxWidth:"95vw",maxHeight:"80vh",overflowY:"auto",boxShadow:"0 8px 32px rgba(0,0,0,0.2)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <h3 style={{fontSize:16,fontWeight:700,color:"#1a1a2e"}}>품목 엑셀 가져오기 미리보기</h3>
+            <button onClick={()=>{setImportModal(false);setImportData([]);setImportError("");}} style={{background:"none",border:"none",cursor:"pointer"}}><X size={18}/></button>
+          </div>
+          {importError&&(<div style={{background:"#fff3e0",border:"1px solid #ff9800",borderRadius:6,padding:10,marginBottom:12,fontSize:12,color:"#e65100",whiteSpace:"pre-line",display:"flex",gap:6}}><AlertCircle size={14} style={{flexShrink:0,marginTop:1}}/>{importError}</div>)}
+          {importData.length>0&&(<>
+            <div style={{background:"#e8f5e9",border:"1px solid #4caf50",borderRadius:6,padding:10,marginBottom:12,fontSize:12,color:"#2e7d32"}}>✓ 총 <strong>{importData.length}개</strong> 품목을 인식했습니다.</div>
+            <div style={{marginBottom:12}}>
+              <label style={{fontSize:12,fontWeight:600,color:"#555",marginBottom:4,display:"block"}}>가져오기 방식</label>
+              <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+                <label style={{display:"flex",alignItems:"center",gap:5,fontSize:12,cursor:"pointer"}}><input type="radio" value="append" checked={importMode==="append"} onChange={()=>setImportMode("append")}/>추가 (기존 유지, 품목코드 중복 시 업데이트)</label>
+                <label style={{display:"flex",alignItems:"center",gap:5,fontSize:12,cursor:"pointer"}}><input type="radio" value="replace" checked={importMode==="replace"} onChange={()=>setImportMode("replace")}/>전체 교체 (기존 품목 삭제)</label>
+              </div>
+            </div>
+            <div style={{overflowX:"auto",marginBottom:16,border:"1px solid #e8eaed",borderRadius:6}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                <thead><tr style={{background:"#f8f9fa"}}>{["품목코드","품목명","규격","단위","기본단가","분류"].map((h,i)=><th key={i} style={{...S.th,fontSize:11}}>{h}</th>)}</tr></thead>
+                <tbody>{importData.slice(0,20).map((p,i)=>(
+                  <tr key={i} style={{borderBottom:"1px solid #f0f0f0"}}>
+                    <td style={{padding:"5px 8px",fontFamily:"monospace",color:"#1a237e",fontWeight:600}}>{p.code||"(자동)"}</td>
+                    <td style={{padding:"5px 8px",fontWeight:500}}>{p.name}</td>
+                    <td style={{padding:"5px 8px"}}>{p.spec}</td>
+                    <td style={{padding:"5px 8px",textAlign:"center"}}>{p.unit}</td>
+                    <td style={{padding:"5px 8px",textAlign:"right"}}>{fmt(p.basePrice)}</td>
+                    <td style={{padding:"5px 8px"}}>{p.category}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+              {importData.length>20&&<div style={{padding:"6px 10px",fontSize:11,color:"#888"}}>...외 {importData.length-20}개</div>}
+            </div>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button onClick={()=>{setImportModal(false);setImportData([]);setImportError("");}} style={S.btnSec}>취소</button>
+              <button onClick={confirmImport} style={{...S.btn,background:"#2e7d32",display:"flex",alignItems:"center",gap:5}}><CheckCircle size={14}/>가져오기 확정</button>
+            </div>
+          </>)}
+          {importData.length===0&&importError&&(<div style={{display:"flex",justifyContent:"flex-end",marginTop:12}}><button onClick={()=>{setImportModal(false);setImportError("");}} style={S.btnSec}>닫기</button></div>)}
+        </div>
+      </div>
+    )}
   </div>);
 };
 
@@ -858,11 +998,88 @@ const PartnerPricePage = ({partners,products,partnerPrices,setPartnerPrices}) =>
   const [selPartner,setSelPartner]=useState("");
   const [editingRow,setEditingRow]=useState(null);
   const [editPrice,setEditPrice]=useState("");
+  const [ppImportModal,setPpImportModal]=useState(false);
+  const [ppImportData,setPpImportData]=useState([]);
+  const [ppImportError,setPpImportError]=useState("");
+  const ppFileRef=useRef(null);
   const prices = selPartner ? (partnerPrices[selPartner]||{}) : {};
   const setPrice=(prodId,price)=>{setPartnerPrices(prev=>{const pp={...prev};if(!pp[selPartner]) pp[selPartner]={};if(price===null||price===undefined||price===""||price===0){const cp={...pp[selPartner]};delete cp[prodId];pp[selPartner]=cp;}else{pp[selPartner]={...pp[selPartner],[prodId]:Number(price)};}return pp;});};
-  return (<div><h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>거래처별 단가 설정</h2>
+  const PP_HEADERS=["거래처명","품목코드","품목명","특별단가"];
+  const exportPP=()=>{
+    if(!window.XLSX){alert("XLSX 라이브러리가 로드되지 않았습니다.");return;}
+    const rows=[PP_HEADERS];
+    partners.forEach(pt=>{const pp=partnerPrices[pt.id]||{};products.forEach(prod=>{const sp=pp[prod.id];if(sp!=null)rows.push([pt.name,prod.code||prod.id,prod.name,sp]);});});
+    if(rows.length===1){alert("설정된 특별단가가 없습니다.");return;}
+    const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=PP_HEADERS.map(h=>({wch:Math.max(h.length*2,14)}));
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"거래처별단가");XLSX.writeFile(wb,"거래처별단가_내보내기.xlsx");
+  };
+  const downloadPPTemplate=()=>{
+    if(!window.XLSX){alert("XLSX 라이브러리가 로드되지 않았습니다.");return;}
+    const ws=XLSX.utils.aoa_to_sheet([PP_HEADERS,["(주)예시거래처","A001","웹개발 용역",12000000],["(주)예시거래처","A002","서버 유지보수",4000000]]);
+    ws['!cols']=PP_HEADERS.map(h=>({wch:Math.max(h.length*2,14)}));
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"거래처별단가");XLSX.writeFile(wb,"거래처별단가_입력양식.xlsx");
+  };
+  const handlePPFile=(e)=>{
+    const file=e.target.files[0];if(!file)return;
+    if(!window.XLSX){alert("XLSX 라이브러리가 로드되지 않았습니다.");return;}
+    const reader=new FileReader();
+    reader.onload=(evt)=>{
+      try{
+        const wb=XLSX.read(evt.target.result,{type:"binary"});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+        if(rows.length<2){setPpImportError("데이터가 없습니다.");setPpImportData([]);return;}
+        const headers=rows[0].map(h=>String(h).trim());
+        const ptNameIdx=headers.findIndex(h=>h==="거래처명");
+        const prodCodeIdx=headers.findIndex(h=>h==="품목코드");
+        const prodNameIdx=headers.findIndex(h=>h==="품목명");
+        const priceIdx=headers.findIndex(h=>h==="특별단가");
+        if(ptNameIdx<0||priceIdx<0){setPpImportError("'거래처명'과 '특별단가' 열이 필요합니다. 양식 파일을 사용해주세요.");setPpImportData([]);return;}
+        const parsed=[];const errs=[];
+        rows.slice(1).forEach((row,ri)=>{
+          if(row.every(c=>c===""||c===null||c===undefined))return;
+          const ptName=String(row[ptNameIdx]||"").trim();
+          const prodCode=prodCodeIdx>=0?String(row[prodCodeIdx]||"").trim():"";
+          const prodName=prodNameIdx>=0?String(row[prodNameIdx]||"").trim():"";
+          const price=Number(row[priceIdx])||0;
+          if(!ptName){errs.push(`${ri+2}행: 거래처명이 비어있습니다.`);return;}
+          const pt=partners.find(p=>p.name===ptName);
+          const prod=products.find(p=>(prodCode&&(p.code||p.id)===prodCode)||(prodName&&p.name===prodName));
+          if(!pt){errs.push(`${ri+2}행: 거래처 '${ptName}'를 찾을 수 없습니다.`);return;}
+          if(!prod){errs.push(`${ri+2}행: 품목 '${prodCode||prodName}'을 찾을 수 없습니다.`);return;}
+          parsed.push({ptId:pt.id,ptName:pt.name,prodId:prod.id,prodCode:prod.code||prod.id,prodName:prod.name,price});
+        });
+        if(errs.length>0){setPpImportError(errs.join("\n"));}else{setPpImportError("");}
+        setPpImportData(parsed);setPpImportModal(true);
+      }catch(err){setPpImportError("파일 읽기 오류: "+err.message);setPpImportData([]);setPpImportModal(true);}
+    };
+    reader.readAsBinaryString(file);e.target.value="";
+  };
+  const confirmPPImport=()=>{
+    if(ppImportData.length===0)return;
+    setPartnerPrices(prev=>{
+      const pp={...prev};
+      ppImportData.forEach(({ptId,prodId,price})=>{
+        if(!pp[ptId])pp[ptId]={};
+        if(price>0){pp[ptId]={...pp[ptId],[prodId]:price};}
+        else{const cp={...pp[ptId]};delete cp[prodId];pp[ptId]=cp;}
+      });
+      return pp;
+    });
+    setPpImportModal(false);setPpImportData([]);setPpImportError("");
+  };
+  return (<div>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
+      <h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e"}}>거래처별 단가 설정</h2>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <button onClick={downloadPPTemplate} style={{...S.btn,background:"#546e7a",display:"flex",alignItems:"center",gap:5,fontSize:12}}><FileSpreadsheet size={14}/>양식 다운로드</button>
+        <button onClick={()=>ppFileRef.current&&ppFileRef.current.click()} style={{...S.btn,background:"#2e7d32",display:"flex",alignItems:"center",gap:5,fontSize:12}}><Upload size={14}/>엑셀 가져오기</button>
+        <button onClick={exportPP} style={{...S.btn,background:"#1565c0",display:"flex",alignItems:"center",gap:5,fontSize:12}}><Download size={14}/>엑셀 내보내기</button>
+        <input ref={ppFileRef} type="file" accept=".xlsx,.xls" onChange={handlePPFile} style={{display:"none"}}/>
+      </div>
+    </div>
     <div style={{...S.card,padding:18,marginBottom:14}}>
-      <div style={{flex:"0 0 280px"}}><label style={S.label}>거래처 선택</label>
+      <div style={{flex:"0 0 280px"}}><label style={S.label}>거래처 선택 (개별 단가 설정)</label>
         <select value={selPartner} onChange={e=>setSelPartner(e.target.value)} style={S.select}>
           <option value="">거래처를 선택하세요...</option>
           {partners.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
@@ -873,10 +1090,11 @@ const PartnerPricePage = ({partners,products,partnerPrices,setPartnerPrices}) =>
       <div style={{...S.card,overflow:"auto"}}>
         <div style={{padding:"10px 14px",background:"#f0f4ff",fontWeight:600,color:"#1a237e",borderBottom:"1px solid #e8eaed"}}>{partners.find(p=>p.id===selPartner)?.name} — 품목별 단가</div>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}>
-          <thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["품목","기본단가","특별단가","할인율","관리"].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead>
+          <thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["품목코드","품목명","기본단가","특별단가","할인율","관리"].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead>
           <tbody>{products.map(prod=>{
             const special=prices[prod.id];const discount=special!=null?((1-special/prod.basePrice)*100).toFixed(1):null;const isEditing=editingRow===prod.id;
             return (<tr key={prod.id} style={{borderBottom:"1px solid #f0f0f0",background:special!=null?"#fff8e1":"transparent"}}>
+              <td style={{padding:8,fontFamily:"monospace",color:"#1a237e",fontWeight:600,fontSize:12}}>{prod.code||prod.id}</td>
               <td style={{padding:8,fontWeight:500}}>{prod.name}</td>
               <td style={{padding:8,textAlign:"right",color:"#888"}}>{fmt(prod.basePrice)}</td>
               <td style={{padding:8,textAlign:"right"}}>{isEditing?(<input type="number" value={editPrice} onChange={e=>setEditPrice(e.target.value)} style={{...S.input,width:100,textAlign:"right",padding:"4px 8px"}} autoFocus onKeyDown={e=>{if(e.key==="Enter"){setPrice(prod.id,editPrice);setEditingRow(null);}}}/>):(<span style={{fontWeight:special!=null?700:400,color:special!=null?"#e65100":"#ccc"}}>{special!=null?fmt(special):"-"}</span>)}</td>
@@ -887,6 +1105,39 @@ const PartnerPricePage = ({partners,products,partnerPrices,setPartnerPrices}) =>
         </table>
       </div>
     ) : (<div style={{...S.card,padding:50,textAlign:"center",color:"#999"}}>거래처를 선택하면 품목별 단가를 설정할 수 있습니다.</div>)}
+    {ppImportModal&&(
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"#fff",borderRadius:12,padding:24,width:640,maxWidth:"95vw",maxHeight:"80vh",overflowY:"auto",boxShadow:"0 8px 32px rgba(0,0,0,0.2)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <h3 style={{fontSize:16,fontWeight:700,color:"#1a1a2e"}}>거래처별 단가 엑셀 가져오기 미리보기</h3>
+            <button onClick={()=>{setPpImportModal(false);setPpImportData([]);setPpImportError("");}} style={{background:"none",border:"none",cursor:"pointer"}}><X size={18}/></button>
+          </div>
+          {ppImportError&&(<div style={{background:"#fff3e0",border:"1px solid #ff9800",borderRadius:6,padding:10,marginBottom:12,fontSize:12,color:"#e65100",whiteSpace:"pre-line",display:"flex",gap:6}}><AlertCircle size={14} style={{flexShrink:0,marginTop:1}}/>{ppImportError}</div>)}
+          {ppImportData.length>0&&(<>
+            <div style={{background:"#e8f5e9",border:"1px solid #4caf50",borderRadius:6,padding:10,marginBottom:12,fontSize:12,color:"#2e7d32"}}>✓ 총 <strong>{ppImportData.length}개</strong> 단가 항목을 인식했습니다. (기존 단가에 추가/업데이트)</div>
+            <div style={{overflowX:"auto",marginBottom:16,border:"1px solid #e8eaed",borderRadius:6}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                <thead><tr style={{background:"#f8f9fa"}}>{["거래처명","품목코드","품목명","특별단가"].map((h,i)=><th key={i} style={{...S.th,fontSize:11}}>{h}</th>)}</tr></thead>
+                <tbody>{ppImportData.slice(0,20).map((r,i)=>(
+                  <tr key={i} style={{borderBottom:"1px solid #f0f0f0"}}>
+                    <td style={{padding:"5px 8px",fontWeight:500}}>{r.ptName}</td>
+                    <td style={{padding:"5px 8px",fontFamily:"monospace",color:"#1a237e",fontWeight:600}}>{r.prodCode}</td>
+                    <td style={{padding:"5px 8px"}}>{r.prodName}</td>
+                    <td style={{padding:"5px 8px",textAlign:"right",fontWeight:600,color:"#e65100"}}>{fmt(r.price)}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+              {ppImportData.length>20&&<div style={{padding:"6px 10px",fontSize:11,color:"#888"}}>...외 {ppImportData.length-20}개</div>}
+            </div>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button onClick={()=>{setPpImportModal(false);setPpImportData([]);setPpImportError("");}} style={S.btnSec}>취소</button>
+              <button onClick={confirmPPImport} style={{...S.btn,background:"#2e7d32",display:"flex",alignItems:"center",gap:5}}><CheckCircle size={14}/>가져오기 확정</button>
+            </div>
+          </>)}
+          {ppImportData.length===0&&ppImportError&&(<div style={{display:"flex",justifyContent:"flex-end",marginTop:12}}><button onClick={()=>{setPpImportModal(false);setPpImportError("");}} style={S.btnSec}>닫기</button></div>)}
+        </div>
+      </div>
+    )}
   </div>);
 };
 
