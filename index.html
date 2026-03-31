@@ -1150,6 +1150,16 @@ const StatementPage = ({statements,setStatements,partners,myBiz,products,partner
   const [viewMode,setViewMode]=useState("all");const [filterPartner,setFilterPartner]=useState("");const [filterDateFrom,setFilterDateFrom]=useState("");const [filterDateTo,setFilterDateTo]=useState("");const [dateSubMode,setDateSubMode]=useState("today");const [filterYear,setFilterYear]=useState(new Date().getFullYear());const [filterMonth,setFilterMonth]=useState(new Date().getMonth()+1);const [filterPickFrom,setFilterPickFrom]=useState(new Date().toISOString().slice(0,10));const [filterPickTo,setFilterPickTo]=useState(new Date().toISOString().slice(0,10));const [ptDateSubMode,setPtDateSubMode]=useState("today");const [ptYear,setPtYear]=useState(new Date().getFullYear());const [ptMonth,setPtMonth]=useState(new Date().getMonth()+1);const [ptPickFrom,setPtPickFrom]=useState(new Date().toISOString().slice(0,10));const [ptPickTo,setPtPickTo]=useState(new Date().toISOString().slice(0,10));
   const [stmtDuplex,setStmtDuplex]=useState(()=>{try{return JSON.parse(localStorage.getItem("stmtDuplexPref"))||false;}catch{return false;}});
   const onStmtDuplexChange=(v)=>{setStmtDuplex(v);try{localStorage.setItem("stmtDuplexPref",JSON.stringify(v));}catch{}};
+  const STMT_XLS_HEADERS=["번호","작성일","거래처명","납품기한","결제조건","부가세포함","품목코드","품목명","규격","수량","단위","단가","비고"];
+  const [stmtImportModal,setStmtImportModal]=useState(false);
+  const [stmtImportData,setStmtImportData]=useState([]);
+  const [stmtImportError,setStmtImportError]=useState("");
+  const [stmtImportMode,setStmtImportMode]=useState("append");
+  const stmtFileRef=useRef(null);
+  const downloadStmtTemplate=()=>{if(!window.XLSX){alert("XLSX 라이브러리가 로드되지 않았습니다.");return;}const ws=XLSX.utils.aoa_to_sheet([STMT_XLS_HEADERS,["","2026-03-31","(주)예시거래처","2026-04-05","월말 결제","Y","A001","웹개발 용역","프론트엔드",1,"식",14000000,""],["","2026-03-31","(주)예시거래처","2026-04-05","월말 결제","Y","A002","서버 유지보수","",1,"건",4500000,"2번째 품목"],["","2026-03-31","(주)다른거래처","","30일 후","N","","컨설팅","",2,"건",500000,""]]);ws['!cols']=STMT_XLS_HEADERS.map(h=>({wch:Math.max(h.length*2,14)}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"거래명세서");XLSX.writeFile(wb,"거래명세서_입력양식.xlsx");};
+  const exportStmtExcel=()=>{if(!window.XLSX){alert("XLSX 라이브러리가 로드되지 않았습니다.");return;}const rows=[STMT_XLS_HEADERS];filteredStatements.forEach(s=>{const pt=partners.find(p=>p.id===s.partnerId);const ptName=pt?.name||"";s.items.forEach(it=>{rows.push([s.id,s.date,ptName,s.dueDate||"",s.payTerms||"",s.includeVat!==false?"Y":"N",it.productId||"",it.name||"",it.spec||"",it.qty||0,it.unit||"개",it.unitPrice||0,it.note||""]);});});if(rows.length===1){alert("내보낼 거래명세서가 없습니다.");return;}const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=STMT_XLS_HEADERS.map(h=>({wch:Math.max(h.length*2,14)}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"거래명세서");XLSX.writeFile(wb,"거래명세서_내보내기.xlsx");};
+  const handleStmtFileChange=(e)=>{const file=e.target.files[0];if(!file)return;if(!window.XLSX){alert("XLSX 라이브러리가 로드되지 않았습니다.");return;}const reader=new FileReader();reader.onload=(evt)=>{try{const wb=XLSX.read(evt.target.result,{type:"binary"});const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});if(rows.length<2){setStmtImportError("데이터가 없습니다.");setStmtImportData([]);setStmtImportModal(true);return;}const headers=rows[0].map(h=>String(h).trim());const H={};STMT_XLS_HEADERS.forEach(k=>{H[k]=headers.indexOf(k);});const ptIdx=H["거래처명"];const nameIdx=H["품목명"];if(ptIdx<0||nameIdx<0){setStmtImportError("'거래처명', '품목명' 열이 필요합니다. 양식 파일을 사용해주세요.");setStmtImportData([]);setStmtImportModal(true);return;}const get=(row,key)=>H[key]>=0?String(row[H[key]]||"").trim():"";const stmtMap={};const stmtOrder=[];const errs=[];rows.slice(1).forEach((row,ri)=>{if(row.every(c=>c===""||c===null||c===undefined))return;const itemName=get(row,"품목명");if(!itemName)return;const ptName=get(row,"거래처명");const date=get(row,"작성일");const stmtId=get(row,"번호");const dueD=get(row,"납품기한");const payT=get(row,"결제조건")||"월말 결제";const vatF=get(row,"부가세포함").toUpperCase()!=="N"?"Y":"N";const key=stmtId||(ptName+"|"+date+"|"+dueD+"|"+payT+"|"+vatF);if(!stmtMap[key]){stmtOrder.push(key);stmtMap[key]={id:stmtId||null,date:date||new Date().toISOString().slice(0,10),partnerName:ptName,dueDate:dueD,payTerms:payT,includeVat:vatF==="Y",items:[]};}stmtMap[key].items.push({productId:get(row,"품목코드"),name:itemName,spec:get(row,"규격"),qty:Number(get(row,"수량"))||1,unit:get(row,"단위")||"개",unitPrice:Number(get(row,"단가"))||0,note:get(row,"비고")});});const parsed=stmtOrder.map(key=>stmtMap[key]);parsed.forEach((s,i)=>{if(!s.partnerName){errs.push(`명세서 ${i+1}: 거래처명이 없습니다.`);}else{const pt=partners.find(p=>p.name===s.partnerName);if(!pt)errs.push(`명세서 ${i+1}: 거래처 '${s.partnerName}'를 찾을 수 없습니다.`);}});if(errs.length>0)setStmtImportError(errs.join("\n"));else setStmtImportError("");setStmtImportData(parsed);setStmtImportModal(true);}catch(err){setStmtImportError("파일 읽기 오류: "+err.message);setStmtImportData([]);setStmtImportModal(true);}};reader.readAsBinaryString(file);e.target.value="";};
+  const confirmStmtImport=()=>{if(stmtImportData.length===0)return;const calcT=(items,includeVat)=>{const sup=items.reduce((s,it)=>s+(it.qty*it.unitPrice),0);const vat=includeVat?Math.round(sup*0.1):0;return{supplyTotal:sup,vatTotal:vat,grandTotal:sup+vat};};if(stmtImportMode==="replace"){const newS=stmtImportData.map((s,i)=>{const pt=partners.find(p=>p.name===s.partnerName);const nid="S"+String(i+1).padStart(3,"0");const t=calcT(s.items,s.includeVat);return{id:nid,date:s.date,partnerId:pt?.id||"",items:s.items,dueDate:s.dueDate,payTerms:s.payTerms,memo:"",includeVat:s.includeVat,...t,status:"발행완료"};});setStatements(newS);}else{setStatements(prev=>{let cur=[...prev];stmtImportData.forEach(s=>{const pt=partners.find(p=>p.name===s.partnerName);if(!pt)return;if(s.id){const ei=cur.findIndex(x=>x.id===s.id);if(ei>=0){const t=calcT(s.items,s.includeVat);cur[ei]={...cur[ei],date:s.date,partnerId:pt.id,items:s.items,dueDate:s.dueDate,payTerms:s.payTerms,includeVat:s.includeVat,...t};return;}}const maxNum=Math.max(0,...cur.map(x=>parseInt(x.id.replace("S",""))||0));const nid="S"+String(maxNum+1).padStart(3,"0");const t=calcT(s.items,s.includeVat);cur=[...cur,{id:nid,date:s.date,partnerId:pt.id,items:s.items,dueDate:s.dueDate,payTerms:s.payTerms,memo:"",includeVat:s.includeVat,...t,status:"발행완료"}];});return cur;});}setStmtImportModal(false);setStmtImportData([]);setStmtImportError("");};
   const getPrice=(prodId,partnerId)=>{if(partnerId&&partnerPrices[partnerId]&&partnerPrices[partnerId][prodId]!=null)return partnerPrices[partnerId][prodId];const prod=products.find(p=>p.id===prodId);return prod?prod.basePrice:0;};
   const calcTotals=(items,includeVat=true)=>{const sup=items.reduce((s,it)=>s+(it.qty*it.unitPrice),0);const vat=includeVat?Math.round(sup*0.1):0;return{supplyTotal:sup,vatTotal:vat,grandTotal:sup+vat};};
   const selectProduct=(idx,prodId)=>{const prod=products.find(p=>p.id===prodId);if(!prod)return;const price=getPrice(prodId,form.partnerId);const items=[...form.items];items[idx]={...items[idx],productId:prodId,name:prod.name,spec:prod.spec,unit:prod.unit,unitPrice:price};setForm({...form,items});};
@@ -1208,9 +1218,15 @@ const StatementPage = ({statements,setStatements,partners,myBiz,products,partner
   );
   return (
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
         <h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e"}}>거래명세서</h2>
-        <button onClick={()=>setMode("form")} style={S.btn}><Plus size={14}/> 새 거래명세서</button>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <button onClick={downloadStmtTemplate} style={{...S.btn,background:"#546e7a",display:"flex",alignItems:"center",gap:5,fontSize:12}}><FileSpreadsheet size={14}/>양식 다운로드</button>
+          <button onClick={()=>stmtFileRef.current&&stmtFileRef.current.click()} style={{...S.btn,background:"#2e7d32",display:"flex",alignItems:"center",gap:5,fontSize:12}}><Upload size={14}/>엑셀 가져오기</button>
+          <button onClick={exportStmtExcel} style={{...S.btn,background:"#1565c0",display:"flex",alignItems:"center",gap:5,fontSize:12}}><Download size={14}/>엑셀 내보내기</button>
+          <input ref={stmtFileRef} type="file" accept=".xlsx,.xls" onChange={handleStmtFileChange} style={{display:"none"}}/>
+          <button onClick={()=>setMode("form")} style={S.btn}><Plus size={14}/> 새 거래명세서</button>
+        </div>
       </div>
       <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
         {[["all","전체"],["byPartner","매출처별"],["byDate","일자별"]].map(([v,l])=><button key={v} onClick={()=>setViewMode(v)} style={{padding:"7px 14px",fontSize:12.5,fontWeight:viewMode===v?700:400,background:viewMode===v?"#1a237e":"transparent",color:viewMode===v?"#fff":"#555",border:viewMode===v?"none":"1px solid #ddd",borderRadius:6,cursor:"pointer"}}>{l}</button>)}
@@ -1238,6 +1254,48 @@ const StatementPage = ({statements,setStatements,partners,myBiz,products,partner
         {!filteredStatements.length&&<div style={{padding:40,textAlign:"center",color:"#999"}}>거래명세서가 없습니다.</div>}
       </div>
       {preview&&<PrintModal title="거래명세서" onClose={()=>setPreview(null)} allowDuplex defaultDuplex={stmtDuplex} onDuplexChange={onStmtDuplexChange} renderHalf={()=><StatementPreview stmt={preview.data} partner={preview.partner} myBiz={myBiz} half/>}><StatementPreview stmt={preview.data} partner={preview.partner} myBiz={myBiz}/></PrintModal>}
+      {stmtImportModal&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"#fff",borderRadius:12,padding:24,width:680,maxWidth:"95vw",maxHeight:"80vh",overflowY:"auto",boxShadow:"0 8px 32px rgba(0,0,0,0.2)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <h3 style={{fontSize:16,fontWeight:700,color:"#1a1a2e"}}>거래명세서 엑셀 가져오기 미리보기</h3>
+              <button onClick={()=>{setStmtImportModal(false);setStmtImportData([]);setStmtImportError("");}} style={{background:"none",border:"none",cursor:"pointer"}}><X size={18}/></button>
+            </div>
+            {stmtImportError&&(<div style={{background:"#fff3e0",border:"1px solid #ff9800",borderRadius:6,padding:10,marginBottom:12,fontSize:12,color:"#e65100",whiteSpace:"pre-line",display:"flex",gap:6}}><AlertCircle size={14} style={{flexShrink:0,marginTop:1}}/>{stmtImportError}</div>)}
+            {stmtImportData.length>0&&(<>
+              <div style={{background:"#e8f5e9",border:"1px solid #4caf50",borderRadius:6,padding:10,marginBottom:12,fontSize:12,color:"#2e7d32"}}>✓ 총 <strong>{stmtImportData.length}건</strong>의 거래명세서({stmtImportData.reduce((s,x)=>s+x.items.length,0)}개 품목)를 인식했습니다.</div>
+              <div style={{marginBottom:12}}>
+                <label style={{fontSize:12,fontWeight:600,color:"#555",marginBottom:4,display:"block"}}>가져오기 방식</label>
+                <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+                  <label style={{display:"flex",alignItems:"center",gap:5,fontSize:12,cursor:"pointer"}}><input type="radio" value="append" checked={stmtImportMode==="append"} onChange={()=>setStmtImportMode("append")}/>추가 (기존 유지, 번호 일치 시 업데이트)</label>
+                  <label style={{display:"flex",alignItems:"center",gap:5,fontSize:12,cursor:"pointer"}}><input type="radio" value="replace" checked={stmtImportMode==="replace"} onChange={()=>setStmtImportMode("replace")}/>전체 교체 (기존 거래명세서 삭제)</label>
+                </div>
+              </div>
+              <div style={{overflowX:"auto",marginBottom:16,border:"1px solid #e8eaed",borderRadius:6}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                  <thead><tr style={{background:"#f8f9fa"}}>{["번호","작성일","거래처명","납품기한","결제조건","부가세","품목수","합계"].map((h,i)=><th key={i} style={{...S.th,fontSize:11}}>{h}</th>)}</tr></thead>
+                  <tbody>{stmtImportData.slice(0,15).map((s,i)=>{const sup=s.items.reduce((t,it)=>t+(it.qty*it.unitPrice),0);const vat=s.includeVat?Math.round(sup*0.1):0;return(<tr key={i} style={{borderBottom:"1px solid #f0f0f0"}}>
+                    <td style={{padding:"5px 8px",fontFamily:"monospace",color:"#888"}}>{s.id||"(신규)"}</td>
+                    <td style={{padding:"5px 8px"}}>{s.date}</td>
+                    <td style={{padding:"5px 8px",fontWeight:500}}>{s.partnerName}</td>
+                    <td style={{padding:"5px 8px"}}>{s.dueDate||"-"}</td>
+                    <td style={{padding:"5px 8px"}}>{s.payTerms}</td>
+                    <td style={{padding:"5px 8px",textAlign:"center"}}>{s.includeVat?"Y":"N"}</td>
+                    <td style={{padding:"5px 8px",textAlign:"center"}}>{s.items.length}</td>
+                    <td style={{padding:"5px 8px",textAlign:"right",fontWeight:700}}>{fmt(sup+vat)}</td>
+                  </tr>);})}</tbody>
+                </table>
+                {stmtImportData.length>15&&<div style={{padding:"6px 10px",fontSize:11,color:"#888"}}>...외 {stmtImportData.length-15}건</div>}
+              </div>
+              <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                <button onClick={()=>{setStmtImportModal(false);setStmtImportData([]);setStmtImportError("");}} style={S.btnSec}>취소</button>
+                <button onClick={confirmStmtImport} style={{...S.btn,background:"#2e7d32",display:"flex",alignItems:"center",gap:5}}><CheckCircle size={14}/>가져오기 확정</button>
+              </div>
+            </>)}
+            {stmtImportData.length===0&&(<div style={{display:"flex",justifyContent:"flex-end",marginTop:12}}><button onClick={()=>{setStmtImportModal(false);setStmtImportError("");}} style={S.btnSec}>닫기</button></div>)}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
