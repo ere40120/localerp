@@ -441,8 +441,19 @@ const ALL_MENUS = [
   {id:"trial",label:"시산표",icon:Calculator},{id:"bs",label:"재무상태표",icon:FileText},
   {id:"is",label:"손익계산서",icon:BarChart3},{id:"partners",label:"거래처관리",icon:Users},
   {id:"accounts",label:"계정과목관리",icon:Settings},{id:"products",label:"품목/단가관리",icon:Package},
-  {id:"partnerPrice",label:"거래처별 단가",icon:Tag},{id:"bizSettings",label:"회사정보 설정",icon:Building2},
-  {id:"backup",label:"백업/복원",icon:HardDrive},
+  {id:"partnerPrice",label:"거래처별 단가",icon:Tag},{id:"costCalc",label:"원가계산",icon:Layers},
+  {id:"bizSettings",label:"회사정보 설정",icon:Building2},{id:"backup",label:"백업/복원",icon:HardDrive},
+];
+const INIT_MATERIALS = [
+  {id:"MAT001",name:"원자재A",unit:"kg",unitPrice:10000},
+  {id:"MAT002",name:"원자재B",unit:"개",unitPrice:5000},
+  {id:"MAT003",name:"원자재C",unit:"L",unitPrice:3000},
+];
+const INIT_COST_PRODUCTS = [
+  {id:"CP001",name:"완제품A",unit:"개",laborCost:2000,packagingCost:500,marginRate:30,
+    materials:[{materialId:"MAT001",qty:2},{materialId:"MAT002",qty:3}]},
+  {id:"CP002",name:"완제품B",unit:"박스",laborCost:5000,packagingCost:1000,marginRate:25,
+    materials:[{materialId:"MAT002",qty:5},{materialId:"MAT003",qty:1}]},
 ];
 const fmt = n => (n||0).toLocaleString("ko-KR");
 const fmtW = n => "₩"+Math.abs(n||0).toLocaleString("ko-KR");
@@ -2084,6 +2095,416 @@ const AccountsMgmt = ({accounts}) => {
   return(<div><h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>계정과목관리</h2>{Object.keys(grouped).map(cat=><div key={cat} style={{...S.card,marginBottom:8,overflow:"hidden"}}><div onClick={()=>setExp(p=>p.includes(cat)?p.filter(c=>c!==cat):[...p,cat])} style={{padding:"10px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:7,background:colors[cat]+"10"}}>{exp.includes(cat)?<ChevronDown size={15}/>:<ChevronRight size={15}/>}<span style={{fontWeight:700,color:colors[cat]}}>{cat}</span><span style={{fontSize:12,color:"#888"}}>({Object.values(grouped[cat]).flat().length})</span></div>{exp.includes(cat)&&<div style={{padding:"4px 0"}}>{Object.keys(grouped[cat]).map(sub=><div key={sub}><div style={{padding:"5px 22px",fontSize:12,fontWeight:600,color:"#666",background:"#fafafa"}}>{sub}</div>{grouped[cat][sub].map(a=><div key={a.code} style={{padding:"4px 22px 4px 36px",fontSize:12.5,display:"flex",justifyContent:"space-between",borderBottom:"1px solid #f8f8f8"}}><span><span style={{color:"#999",marginRight:8}}>{a.code}</span>{a.name}</span><span style={{fontSize:11,color:"#aaa"}}>{a.type==="debit"?"차변":"대변"}</span></div>)}</div>)}</div>}</div>)}</div>);
 };
 
+// ===================== 원가계산 모듈 =====================
+function CostCalcPage({materials, setMaterials, costProducts, setCostProducts}) {
+  const [tab, setTab] = useState("materials"); // "materials" | "products"
+
+  // ---- 원자재 상태 ----
+  const [matForm, setMatForm] = useState({id:"",name:"",unit:"",unitPrice:""});
+  const [matEdit, setMatEdit] = useState(null); // 편집 중인 id
+  const [matEditForm, setMatEditForm] = useState({});
+
+  // ---- 완제품 상태 ----
+  const [cpForm, setCpForm] = useState({id:"",name:"",unit:"개",laborCost:"",packagingCost:"",marginRate:"",materials:[]});
+  const [cpEdit, setCpEdit] = useState(null);
+  const [cpEditForm, setCpEditForm] = useState({});
+  const [addingMat, setAddingMat] = useState(false); // 완제품 원자재 추가 row
+  const [newMatRow, setNewMatRow] = useState({materialId:"",qty:""});
+  const [editAddingMat, setEditAddingMat] = useState(false);
+  const [editNewMatRow, setEditNewMatRow] = useState({materialId:"",qty:""});
+
+  // 원가 계산 헬퍼
+  const calcCost = (cp) => {
+    const matCost = (cp.materials||[]).reduce((sum,m)=>{
+      const mat = materials.find(x=>x.id===m.materialId);
+      return sum + (mat?mat.unitPrice*m.qty:0);
+    },0);
+    const total = matCost + Number(cp.laborCost||0) + Number(cp.packagingCost||0);
+    const margin = cp.marginRate ? total/(1-Number(cp.marginRate)/100) : total;
+    return {matCost, total, salePrice: Math.round(margin)};
+  };
+
+  // ---- 원자재 엑셀 다운로드 ----
+  const downloadMatXlsx = () => {
+    const wb = XLSX.utils.book_new();
+    const rows = [["ID","원자재명","단위","단가(원)"],...materials.map(m=>[m.id,m.name,m.unit,m.unitPrice])];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws["!cols"]=[{wch:10},{wch:20},{wch:8},{wch:14}];
+    XLSX.utils.book_append_sheet(wb,ws,"원자재목록");
+    XLSX.writeFile(wb,"원자재목록.xlsx");
+  };
+
+  // ---- 원자재 엑셀 업로드 ----
+  const uploadMatXlsx = (e) => {
+    const file = e.target.files[0]; if(!file)return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const wb = XLSX.read(ev.target.result, {type:"binary"});
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws,{header:1});
+        const newMats = [];
+        for(let i=1;i<rows.length;i++){
+          const r=rows[i];
+          if(!r[1])continue;
+          newMats.push({
+            id: r[0]||("MAT"+String(Date.now()+i).slice(-5)),
+            name: String(r[1]||""),
+            unit: String(r[2]||"개"),
+            unitPrice: Number(r[3]||0),
+          });
+        }
+        if(newMats.length>0){setMaterials(newMats); alert(newMats.length+"개 원자재를 불러왔습니다.");}
+      } catch(err){alert("파일을 읽을 수 없습니다.");}
+    };
+    reader.readAsBinaryString(file);
+    e.target.value="";
+  };
+
+  // ---- 완제품 엑셀 다운로드 ----
+  const downloadCpXlsx = () => {
+    const wb = XLSX.utils.book_new();
+    // Sheet1: 완제품 기본정보
+    const hdr = ["ID","완제품명","단위","인건비","포장비","마진율(%)","원자재원가","총원가","판매가"];
+    const rows = [hdr,...costProducts.map(cp=>{
+      const {matCost,total,salePrice}=calcCost(cp);
+      return [cp.id,cp.name,cp.unit,cp.laborCost,cp.packagingCost,cp.marginRate,matCost,total,salePrice];
+    })];
+    const ws1 = XLSX.utils.aoa_to_sheet(rows);
+    ws1["!cols"]=[{wch:10},{wch:18},{wch:7},{wch:10},{wch:8},{wch:10},{wch:12},{wch:12},{wch:12}];
+    XLSX.utils.book_append_sheet(wb,ws1,"완제품원가");
+    // Sheet2: 완제품별 원자재 구성
+    const hdr2=["완제품ID","완제품명","원자재ID","원자재명","단위","수량","단가","소계"];
+    const rows2=[hdr2];
+    costProducts.forEach(cp=>{
+      (cp.materials||[]).forEach(m=>{
+        const mat=materials.find(x=>x.id===m.materialId);
+        rows2.push([cp.id,cp.name,m.materialId,mat?mat.name:"",mat?mat.unit:"",m.qty,mat?mat.unitPrice:0,(mat?mat.unitPrice:0)*m.qty]);
+      });
+    });
+    const ws2=XLSX.utils.aoa_to_sheet(rows2);
+    ws2["!cols"]=[{wch:10},{wch:18},{wch:10},{wch:18},{wch:7},{wch:7},{wch:12},{wch:12}];
+    XLSX.utils.book_append_sheet(wb,ws2,"원자재구성");
+    XLSX.writeFile(wb,"원가계산.xlsx");
+  };
+
+  // ---- 완제품 엑셀 업로드 ----
+  const uploadCpXlsx = (e) => {
+    const file = e.target.files[0]; if(!file)return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const wb = XLSX.read(ev.target.result, {type:"binary"});
+        // Sheet1: 완제품
+        const ws1 = wb.Sheets[wb.SheetNames[0]];
+        const rows1 = XLSX.utils.sheet_to_json(ws1,{header:1});
+        // Sheet2: 원자재 구성 (있으면)
+        const ws2 = wb.SheetNames[1]?wb.Sheets[wb.SheetNames[1]]:null;
+        const matRows = ws2?XLSX.utils.sheet_to_json(ws2,{header:1}).slice(1):[];
+        // 완제품별 원자재 맵
+        const cpMatMap={};
+        matRows.forEach(r=>{
+          if(!r[0])return;
+          const cpId=String(r[0]);
+          if(!cpMatMap[cpId])cpMatMap[cpId]=[];
+          if(r[2])cpMatMap[cpId].push({materialId:String(r[2]),qty:Number(r[5]||1)});
+        });
+        const newCps=[];
+        for(let i=1;i<rows1.length;i++){
+          const r=rows1[i];
+          if(!r[1])continue;
+          const id=r[0]||("CP"+String(Date.now()+i).slice(-5));
+          newCps.push({
+            id:String(id),name:String(r[1]),unit:String(r[2]||"개"),
+            laborCost:Number(r[3]||0),packagingCost:Number(r[4]||0),marginRate:Number(r[5]||0),
+            materials:cpMatMap[String(id)]||[],
+          });
+        }
+        if(newCps.length>0){setCostProducts(newCps);alert(newCps.length+"개 완제품을 불러왔습니다.");}
+      } catch(err){alert("파일을 읽을 수 없습니다.");}
+    };
+    reader.readAsBinaryString(file);
+    e.target.value="";
+  };
+
+  const genMatId = () => "MAT"+String(materials.length+1).padStart(3,"0");
+  const genCpId  = () => "CP"+String(costProducts.length+1).padStart(3,"0");
+
+  const S2 = {
+    tab: (active) => ({padding:"8px 18px",borderRadius:6,border:"none",cursor:"pointer",fontWeight:600,fontSize:13,
+      background:active?"#1a237e":"#f0f0f0",color:active?"#fff":"#555",marginRight:6}),
+    addBtn: {background:"#1a237e",color:"#fff",border:"none",borderRadius:6,padding:"7px 14px",cursor:"pointer",fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:5},
+    xlsBtn: (c) => ({background:c||"#43a047",color:"#fff",border:"none",borderRadius:6,padding:"7px 12px",cursor:"pointer",fontWeight:600,fontSize:12,display:"flex",alignItems:"center",gap:4}),
+    inp: {padding:"6px 9px",borderRadius:6,border:"1px solid #ddd",fontSize:13,width:"100%",boxSizing:"border-box"},
+    td: {padding:"8px 10px",borderBottom:"1px solid #f0f0f0",fontSize:13,verticalAlign:"middle"},
+    th: {padding:"8px 10px",fontWeight:700,fontSize:12,color:"#555",background:"#f8f9ff",borderBottom:"2px solid #e0e4f0",whiteSpace:"nowrap"},
+    iconBtn: (c) => ({background:"none",border:"none",cursor:"pointer",color:c||"#1a237e",padding:"3px 5px",fontSize:12}),
+    badge: (c) => ({display:"inline-block",padding:"2px 8px",borderRadius:10,background:c+"18",color:c,fontSize:11,fontWeight:600}),
+  };
+
+  // 원자재 탭 렌더
+  const renderMaterials = () => (
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+        <h3 style={{fontSize:16,fontWeight:700,color:"#1a1a2e",flex:1}}>원자재 관리</h3>
+        <label style={S2.xlsBtn("#1565c0")} title="엑셀 업로드">
+          <Upload size={13}/> 엑셀 업로드
+          <input type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={uploadMatXlsx}/>
+        </label>
+        <button style={S2.xlsBtn("#43a047")} onClick={downloadMatXlsx}><Download size={13}/> 엑셀 다운로드</button>
+      </div>
+      <div style={{...S.card,padding:0,overflow:"hidden"}}>
+        <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <thead>
+            <tr>{["ID","원자재명","단위","단가(원)",""].map(h=><th key={h} style={S2.th}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {/* 새 원자재 입력 row */}
+            <tr style={{background:"#f0f4ff"}}>
+              <td style={S2.td}><input style={S2.inp} placeholder={genMatId()} value={matForm.id} onChange={e=>setMatForm(p=>({...p,id:e.target.value}))} maxLength={10}/></td>
+              <td style={S2.td}><input style={S2.inp} placeholder="원자재명" value={matForm.name} onChange={e=>setMatForm(p=>({...p,name:e.target.value}))}/></td>
+              <td style={S2.td}><input style={{...S2.inp,width:60}} placeholder="kg" value={matForm.unit} onChange={e=>setMatForm(p=>({...p,unit:e.target.value}))}/></td>
+              <td style={S2.td}><input style={{...S2.inp,width:100}} type="number" placeholder="단가" value={matForm.unitPrice} onChange={e=>setMatForm(p=>({...p,unitPrice:e.target.value}))}/></td>
+              <td style={S2.td}>
+                <button style={{...S2.addBtn,padding:"5px 12px"}} onClick={()=>{
+                  if(!matForm.name||!matForm.unitPrice){alert("원자재명과 단가를 입력하세요.");return;}
+                  const id=matForm.id||genMatId();
+                  if(materials.find(m=>m.id===id)){alert("같은 ID가 이미 있습니다.");return;}
+                  setMaterials(p=>[...p,{id,name:matForm.name,unit:matForm.unit||"개",unitPrice:Number(matForm.unitPrice)}]);
+                  setMatForm({id:"",name:"",unit:"",unitPrice:""});
+                }}>추가</button>
+              </td>
+            </tr>
+            {materials.length===0&&<tr><td colSpan={5} style={{...S2.td,textAlign:"center",color:"#aaa"}}>등록된 원자재가 없습니다.</td></tr>}
+            {materials.map(m=>(
+              <tr key={m.id} style={{background:matEdit===m.id?"#f0f7ff":"#fff"}}>
+                {matEdit===m.id ? <>
+                  <td style={S2.td}><span style={{color:"#888",fontSize:12}}>{m.id}</span></td>
+                  <td style={S2.td}><input style={S2.inp} value={matEditForm.name} onChange={e=>setMatEditForm(p=>({...p,name:e.target.value}))}/></td>
+                  <td style={S2.td}><input style={{...S2.inp,width:60}} value={matEditForm.unit} onChange={e=>setMatEditForm(p=>({...p,unit:e.target.value}))}/></td>
+                  <td style={S2.td}><input style={{...S2.inp,width:100}} type="number" value={matEditForm.unitPrice} onChange={e=>setMatEditForm(p=>({...p,unitPrice:e.target.value}))}/></td>
+                  <td style={S2.td}>
+                    <button style={S2.iconBtn("#2e7d32")} onClick={()=>{
+                      setMaterials(p=>p.map(x=>x.id===m.id?{...x,name:matEditForm.name,unit:matEditForm.unit,unitPrice:Number(matEditForm.unitPrice)}:x));
+                      setMatEdit(null);
+                    }}>✔ 저장</button>
+                    <button style={S2.iconBtn("#999")} onClick={()=>setMatEdit(null)}>✖</button>
+                  </td>
+                </> : <>
+                  <td style={S2.td}><span style={{color:"#888",fontSize:12}}>{m.id}</span></td>
+                  <td style={S2.td}><b>{m.name}</b></td>
+                  <td style={S2.td}>{m.unit}</td>
+                  <td style={S2.td} style={{...S2.td,textAlign:"right"}}>{fmt(m.unitPrice)}</td>
+                  <td style={S2.td}>
+                    <button style={S2.iconBtn("#1565c0")} onClick={()=>{setMatEdit(m.id);setMatEditForm({name:m.name,unit:m.unit,unitPrice:m.unitPrice});}}>편집</button>
+                    <button style={S2.iconBtn("#c62828")} onClick={()=>{if(window.confirm("삭제할까요?"))setMaterials(p=>p.filter(x=>x.id!==m.id));}}>삭제</button>
+                  </td>
+                </>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{marginTop:10,fontSize:12,color:"#888"}}>
+        💡 엑셀 양식: ID | 원자재명 | 단위 | 단가(원) (첫 행은 헤더, 이후 데이터)
+      </div>
+    </div>
+  );
+
+  // 완제품 탭 렌더
+  const renderProducts = () => (
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+        <h3 style={{fontSize:16,fontWeight:700,color:"#1a1a2e",flex:1}}>완제품 원가 계산</h3>
+        <label style={S2.xlsBtn("#1565c0")} title="엑셀 업로드">
+          <Upload size={13}/> 엑셀 업로드
+          <input type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={uploadCpXlsx}/>
+        </label>
+        <button style={S2.xlsBtn("#43a047")} onClick={downloadCpXlsx}><Download size={13}/> 엑셀 다운로드</button>
+      </div>
+
+      {/* 신규 완제품 등록 폼 */}
+      <div style={{...S.card,marginBottom:14,padding:14}}>
+        <div style={{fontWeight:700,fontSize:13,color:"#1a237e",marginBottom:10}}>+ 새 완제품 추가</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
+          <div style={{flex:"1 1 100px"}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>ID</div><input style={S2.inp} placeholder={genCpId()} value={cpForm.id} onChange={e=>setCpForm(p=>({...p,id:e.target.value}))} maxLength={10}/></div>
+          <div style={{flex:"2 1 150px"}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>완제품명*</div><input style={S2.inp} placeholder="완제품명" value={cpForm.name} onChange={e=>setCpForm(p=>({...p,name:e.target.value}))}/></div>
+          <div style={{flex:"1 1 70px"}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>단위</div><input style={S2.inp} placeholder="개" value={cpForm.unit} onChange={e=>setCpForm(p=>({...p,unit:e.target.value}))}/></div>
+          <div style={{flex:"1 1 100px"}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>인건비(원)</div><input style={S2.inp} type="number" placeholder="0" value={cpForm.laborCost} onChange={e=>setCpForm(p=>({...p,laborCost:e.target.value}))}/></div>
+          <div style={{flex:"1 1 100px"}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>포장비(원)</div><input style={S2.inp} type="number" placeholder="0" value={cpForm.packagingCost} onChange={e=>setCpForm(p=>({...p,packagingCost:e.target.value}))}/></div>
+          <div style={{flex:"1 1 80px"}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>마진율(%)</div><input style={S2.inp} type="number" placeholder="0" value={cpForm.marginRate} onChange={e=>setCpForm(p=>({...p,marginRate:e.target.value}))}/></div>
+        </div>
+        {/* 원자재 구성 */}
+        <div style={{marginBottom:8}}>
+          <div style={{fontSize:12,fontWeight:600,color:"#555",marginBottom:5}}>원자재 구성</div>
+          {cpForm.materials.map((m,i)=>{
+            const mat=materials.find(x=>x.id===m.materialId);
+            return(
+              <div key={i} style={{display:"flex",gap:6,alignItems:"center",marginBottom:4}}>
+                <span style={{fontSize:12,color:"#333",flex:1}}>{mat?mat.name:"(알수없음)"} × {m.qty} {mat?mat.unit:""}</span>
+                <span style={{fontSize:12,color:"#1565c0"}}>{fmt((mat?mat.unitPrice:0)*m.qty)}원</span>
+                <button style={S2.iconBtn("#c62828")} onClick={()=>setCpForm(p=>({...p,materials:p.materials.filter((_,j)=>j!==i)}))}>✖</button>
+              </div>
+            );
+          })}
+          {addingMat ? (
+            <div style={{display:"flex",gap:6,alignItems:"center",marginTop:4}}>
+              <select style={{...S2.inp,flex:2}} value={newMatRow.materialId} onChange={e=>setNewMatRow(p=>({...p,materialId:e.target.value}))}>
+                <option value="">원자재 선택</option>
+                {materials.map(m=><option key={m.id} value={m.id}>{m.name} ({fmt(m.unitPrice)}원/{m.unit})</option>)}
+              </select>
+              <input style={{...S2.inp,width:70}} type="number" placeholder="수량" min="0" value={newMatRow.qty} onChange={e=>setNewMatRow(p=>({...p,qty:e.target.value}))}/>
+              <button style={{...S2.addBtn,padding:"4px 10px",fontSize:12}} onClick={()=>{
+                if(!newMatRow.materialId||!newMatRow.qty){alert("원자재와 수량을 선택하세요.");return;}
+                setCpForm(p=>({...p,materials:[...p.materials,{materialId:newMatRow.materialId,qty:Number(newMatRow.qty)}]}));
+                setNewMatRow({materialId:"",qty:""});setAddingMat(false);
+              }}>추가</button>
+              <button style={S2.iconBtn("#999")} onClick={()=>{setAddingMat(false);setNewMatRow({materialId:"",qty:""});}}>취소</button>
+            </div>
+          ) : (
+            <button style={{...S2.iconBtn("#1a237e"),fontSize:12,padding:"3px 0"}} onClick={()=>setAddingMat(true)}>+ 원자재 추가</button>
+          )}
+        </div>
+        <button style={S2.addBtn} onClick={()=>{
+          if(!cpForm.name){alert("완제품명을 입력하세요.");return;}
+          const id=cpForm.id||genCpId();
+          if(costProducts.find(c=>c.id===id)){alert("같은 ID가 이미 있습니다.");return;}
+          setCostProducts(p=>[...p,{id,name:cpForm.name,unit:cpForm.unit||"개",laborCost:Number(cpForm.laborCost||0),packagingCost:Number(cpForm.packagingCost||0),marginRate:Number(cpForm.marginRate||0),materials:cpForm.materials}]);
+          setCpForm({id:"",name:"",unit:"개",laborCost:"",packagingCost:"",marginRate:"",materials:[]});
+          setAddingMat(false);
+        }}>완제품 추가</button>
+      </div>
+
+      {/* 완제품 목록 */}
+      {costProducts.length===0&&<div style={{...S.card,padding:20,textAlign:"center",color:"#aaa"}}>등록된 완제품이 없습니다.</div>}
+      {costProducts.map(cp=>{
+        const {matCost,total,salePrice}=calcCost(cp);
+        const isEditing=cpEdit===cp.id;
+        return(
+          <div key={cp.id} style={{...S.card,marginBottom:10,padding:0,overflow:"hidden"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"#f8f9ff",borderBottom:"1px solid #e8eaf0"}}>
+              <span style={{fontWeight:700,fontSize:14,flex:1,color:"#1a237e"}}>{cp.name}</span>
+              <span style={{fontSize:11,color:"#888"}}>{cp.id} · {cp.unit}</span>
+              {!isEditing&&<>
+                <button style={S2.iconBtn("#1565c0")} onClick={()=>{setCpEdit(cp.id);setCpEditForm({...cp,materials:[...cp.materials.map(m=>({...m}))],laborCost:cp.laborCost,packagingCost:cp.packagingCost,marginRate:cp.marginRate});setEditAddingMat(false);}}>편집</button>
+                <button style={S2.iconBtn("#c62828")} onClick={()=>{if(window.confirm("삭제할까요?"))setCostProducts(p=>p.filter(x=>x.id!==cp.id));}}>삭제</button>
+              </>}
+              {isEditing&&<>
+                <button style={{...S2.iconBtn("#2e7d32"),fontWeight:700}} onClick={()=>{
+                  setCostProducts(p=>p.map(x=>x.id===cp.id?{...x,...cpEditForm,laborCost:Number(cpEditForm.laborCost||0),packagingCost:Number(cpEditForm.packagingCost||0),marginRate:Number(cpEditForm.marginRate||0)}:x));
+                  setCpEdit(null);
+                }}>✔ 저장</button>
+                <button style={S2.iconBtn("#999")} onClick={()=>setCpEdit(null)}>✖ 취소</button>
+              </>}
+            </div>
+            {isEditing ? (
+              <div style={{padding:12}}>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
+                  <div style={{flex:"2 1 150px"}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>완제품명</div><input style={S2.inp} value={cpEditForm.name||""} onChange={e=>setCpEditForm(p=>({...p,name:e.target.value}))}/></div>
+                  <div style={{flex:"1 1 70px"}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>단위</div><input style={S2.inp} value={cpEditForm.unit||""} onChange={e=>setCpEditForm(p=>({...p,unit:e.target.value}))}/></div>
+                  <div style={{flex:"1 1 100px"}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>인건비(원)</div><input style={S2.inp} type="number" value={cpEditForm.laborCost||""} onChange={e=>setCpEditForm(p=>({...p,laborCost:e.target.value}))}/></div>
+                  <div style={{flex:"1 1 100px"}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>포장비(원)</div><input style={S2.inp} type="number" value={cpEditForm.packagingCost||""} onChange={e=>setCpEditForm(p=>({...p,packagingCost:e.target.value}))}/></div>
+                  <div style={{flex:"1 1 80px"}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>마진율(%)</div><input style={S2.inp} type="number" value={cpEditForm.marginRate||""} onChange={e=>setCpEditForm(p=>({...p,marginRate:e.target.value}))}/></div>
+                </div>
+                <div style={{fontSize:12,fontWeight:600,color:"#555",marginBottom:5}}>원자재 구성</div>
+                {(cpEditForm.materials||[]).map((m,i)=>{
+                  const mat=materials.find(x=>x.id===m.materialId);
+                  return(
+                    <div key={i} style={{display:"flex",gap:6,alignItems:"center",marginBottom:4}}>
+                      <select style={{...S2.inp,flex:2}} value={m.materialId} onChange={e=>setCpEditForm(p=>({...p,materials:p.materials.map((mm,j)=>j===i?{...mm,materialId:e.target.value}:mm)}))}>
+                        {materials.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}
+                      </select>
+                      <input style={{...S2.inp,width:70}} type="number" value={m.qty} onChange={e=>setCpEditForm(p=>({...p,materials:p.materials.map((mm,j)=>j===i?{...mm,qty:Number(e.target.value)}:mm)}))}/>
+                      <button style={S2.iconBtn("#c62828")} onClick={()=>setCpEditForm(p=>({...p,materials:p.materials.filter((_,j)=>j!==i)}))}>✖</button>
+                    </div>
+                  );
+                })}
+                {editAddingMat ? (
+                  <div style={{display:"flex",gap:6,alignItems:"center",marginTop:4}}>
+                    <select style={{...S2.inp,flex:2}} value={editNewMatRow.materialId} onChange={e=>setEditNewMatRow(p=>({...p,materialId:e.target.value}))}>
+                      <option value="">원자재 선택</option>
+                      {materials.map(m=><option key={m.id} value={m.id}>{m.name} ({fmt(m.unitPrice)}원/{m.unit})</option>)}
+                    </select>
+                    <input style={{...S2.inp,width:70}} type="number" placeholder="수량" min="0" value={editNewMatRow.qty} onChange={e=>setEditNewMatRow(p=>({...p,qty:e.target.value}))}/>
+                    <button style={{...S2.addBtn,padding:"4px 10px",fontSize:12}} onClick={()=>{
+                      if(!editNewMatRow.materialId||!editNewMatRow.qty)return;
+                      setCpEditForm(p=>({...p,materials:[...p.materials,{materialId:editNewMatRow.materialId,qty:Number(editNewMatRow.qty)}]}));
+                      setEditNewMatRow({materialId:"",qty:""});setEditAddingMat(false);
+                    }}>추가</button>
+                    <button style={S2.iconBtn("#999")} onClick={()=>{setEditAddingMat(false);setEditNewMatRow({materialId:"",qty:""});}}>취소</button>
+                  </div>
+                ):(
+                  <button style={{...S2.iconBtn("#1a237e"),fontSize:12}} onClick={()=>setEditAddingMat(true)}>+ 원자재 추가</button>
+                )}
+              </div>
+            ) : (
+              <div style={{padding:12}}>
+                {/* 원자재 구성표 */}
+                <table style={{width:"100%",borderCollapse:"collapse",marginBottom:8}}>
+                  <thead><tr>
+                    <th style={S2.th}>원자재</th><th style={{...S2.th,textAlign:"right"}}>단가</th>
+                    <th style={{...S2.th,textAlign:"right"}}>수량</th><th style={{...S2.th,textAlign:"right"}}>소계</th>
+                  </tr></thead>
+                  <tbody>
+                    {(cp.materials||[]).length===0&&<tr><td colSpan={4} style={{...S2.td,textAlign:"center",color:"#aaa",fontSize:12}}>원자재 없음</td></tr>}
+                    {(cp.materials||[]).map((m,i)=>{
+                      const mat=materials.find(x=>x.id===m.materialId);
+                      return(<tr key={i}>
+                        <td style={S2.td}>{mat?mat.name:<span style={{color:"#c62828"}}>삭제된원자재({m.materialId})</span>}</td>
+                        <td style={{...S2.td,textAlign:"right"}}>{fmt(mat?mat.unitPrice:0)} / {mat?mat.unit:""}</td>
+                        <td style={{...S2.td,textAlign:"right"}}>{m.qty}</td>
+                        <td style={{...S2.td,textAlign:"right",fontWeight:600}}>{fmt((mat?mat.unitPrice:0)*m.qty)}</td>
+                      </tr>);
+                    })}
+                  </tbody>
+                </table>
+                {/* 원가 요약 */}
+                <div style={{background:"#f4f5f7",borderRadius:8,padding:"10px 14px",display:"flex",gap:16,flexWrap:"wrap"}}>
+                  <div style={{textAlign:"center"}}>
+                    <div style={{fontSize:11,color:"#888",marginBottom:2}}>원자재비</div>
+                    <div style={{fontWeight:700,color:"#1565c0"}}>{fmt(matCost)}원</div>
+                  </div>
+                  <div style={{textAlign:"center"}}>
+                    <div style={{fontSize:11,color:"#888",marginBottom:2}}>인건비</div>
+                    <div style={{fontWeight:700,color:"#555"}}>{fmt(cp.laborCost)}원</div>
+                  </div>
+                  <div style={{textAlign:"center"}}>
+                    <div style={{fontSize:11,color:"#888",marginBottom:2}}>포장비</div>
+                    <div style={{fontWeight:700,color:"#555"}}>{fmt(cp.packagingCost)}원</div>
+                  </div>
+                  <div style={{textAlign:"center"}}>
+                    <div style={{fontSize:11,color:"#888",marginBottom:2}}>총원가</div>
+                    <div style={{fontWeight:700,fontSize:15,color:"#c62828"}}>{fmt(total)}원</div>
+                  </div>
+                  {cp.marginRate>0&&<div style={{textAlign:"center"}}>
+                    <div style={{fontSize:11,color:"#888",marginBottom:2}}>판매가 (마진 {cp.marginRate}%)</div>
+                    <div style={{fontWeight:700,fontSize:15,color:"#2e7d32"}}>{fmt(salePrice)}원</div>
+                  </div>}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <div style={{marginTop:10,fontSize:12,color:"#888"}}>
+        💡 엑셀 업로드: Sheet1(완제품기본정보) + Sheet2(원자재구성) 형식 사용. 다운로드 후 양식 확인하세요.
+      </div>
+    </div>
+  );
+
+  return (
+    <div>
+      <h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>원가계산</h2>
+      <div style={{marginBottom:16}}>
+        <button style={S2.tab(tab==="materials")} onClick={()=>setTab("materials")}>원자재 관리</button>
+        <button style={S2.tab(tab==="products")} onClick={()=>setTab("products")}>완제품 원가</button>
+      </div>
+      {tab==="materials" ? renderMaterials() : renderProducts()}
+    </div>
+  );
+}
+// ===================== 원가계산 모듈 끝 =====================
+
 function App({user, localMode}) {
   const [menu,setMenu]=useState("dashboard");
   const [menuOrder,setMenuOrder]=usePersist("menuOrder",ALL_MENUS.map(m=>m.id));
@@ -2105,6 +2526,8 @@ function App({user, localMode}) {
   const [taxInvoices,setTaxInvoices]=usePersist("taxInvoices",INIT_TAXINVOICES);
   const [autoBackup,setAutoBackup]=usePersist("autoBackup",true);
   const [lastAutoBackup,setLastAutoBackup]=usePersist("lastAutoBackup","");
+  const [materials,setMaterials]=usePersist("materials",INIT_MATERIALS);
+  const [costProducts,setCostProducts]=usePersist("costProducts",INIT_COST_PRODUCTS);
   const [sidebarOpen,setSidebarOpen]=useState(false);
 
   // 자동 백업 타이머: 매분 체크, 0시~0시 5분이고 오늘 아직 안 했으면 실행
@@ -2152,6 +2575,7 @@ function App({user, localMode}) {
     case "accounts": return <AccountsMgmt accounts={accounts}/>;
     case "products": return <ProductMgmt products={products} setProducts={setProducts}/>;
     case "partnerPrice": return <PartnerPricePage partners={partners} products={products} partnerPrices={partnerPrices} setPartnerPrices={setPartnerPrices}/>;
+    case "costCalc": return <CostCalcPage materials={materials} setMaterials={setMaterials} costProducts={costProducts} setCostProducts={setCostProducts}/>;
     case "bizSettings": return <BizSettings myBiz={myBiz} setMyBiz={setMyBiz}/>;
     case "backup": return <BackupRestore partners={partners} vouchers={vouchers} statements={statements} taxInvoices={taxInvoices} products={products} partnerPrices={partnerPrices} myBiz={myBiz} menuOrder={menuOrder} hiddenMenus={hiddenMenus} setPartners={setPartners} setVouchers={setVouchers} setStatements={setStatements} setTaxInvoices={setTaxInvoices} setProducts={setProducts} setPartnerPrices={setPartnerPrices} setMyBiz={setMyBiz} setMenuOrder={setMenuOrder} setHiddenMenus={setHiddenMenus} autoBackup={autoBackup} setAutoBackup={setAutoBackup} lastAutoBackup={lastAutoBackup} setLastAutoBackup={setLastAutoBackup} localMode={localMode}/>;
     default: return <Dashboard vouchers={vouchers} accounts={accounts} statements={statements} taxInvoices={taxInvoices}/>;
