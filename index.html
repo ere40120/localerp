@@ -466,6 +466,18 @@ const INIT_PROCESSING_COSTS = [
   {id:"PC006",name:"2인치 가마식",unit:"야드",unitPrice:700,company:"",cat1:"누비",cat2:"2인치 가마식",cat3:""},
 ];
 const INIT_PRICE_HISTORY = {materials:{},processing:{}};
+const INIT_CATEGORIES = [
+  {id:"C001",cat1:"염색",cat2:"피그먼트",cat3:""},
+  {id:"C002",cat1:"염색",cat2:"동판나염",cat3:""},
+  {id:"C003",cat1:"염색",cat2:"DTP",cat3:""},
+  {id:"C004",cat1:"염색",cat2:"전사나염",cat3:""},
+  {id:"C005",cat1:"염색",cat2:"스크린나염",cat3:""},
+  {id:"C006",cat1:"누비",cat2:"1인치 샤틀식",cat3:""},
+  {id:"C007",cat1:"누비",cat2:"2인치 가마식",cat3:""},
+  {id:"C008",cat1:"베개봉재",cat2:"봉재",cat3:""},
+  {id:"C009",cat1:"랍바",cat2:"랍바",cat3:""},
+];
+const INIT_COMPANIES = [];
 const fmt = n => (n||0).toLocaleString("ko-KR");
 const fmtW = n => "₩"+Math.abs(n||0).toLocaleString("ko-KR");
 const toHanja = n => {
@@ -2109,11 +2121,23 @@ const AccountsMgmt = ({accounts}) => {
 // ===================== 원가계산 모듈 v2 =====================
 function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
                        processingCosts, setProcessingCosts,
-                       priceHistory, setPriceHistory}) {
-  const [tab, setTab] = useState("materials"); // "materials"|"processing"|"products"|"history"
+                       priceHistory, setPriceHistory,
+                       categories, setCategories,
+                       companies, setCompanies}) {
+  const [tab, setTab] = useState("materials"); // "materials"|"processing"|"products"|"history"|"catmgmt"
+
+  // ---- 카테고리/회사 관리 상태 ----
+  const [catMgmtView, setCatMgmtView] = useState("category"); // "category"|"company"
+  const [catForm, setCatForm] = useState({cat1:"",cat2:"",cat3:""});
+  const [catEditId, setCatEditId] = useState(null);
+  const [catEditForm, setCatEditForm] = useState({});
+  const [compForm, setCompForm] = useState({name:"",memo:""});
+  const [compEditId, setCompEditId] = useState(null);
+  const [compEditForm, setCompEditForm] = useState({});
+  const [catMgmtOpen, setCatMgmtOpen] = useState({});
 
   // ---- 원자재 상태 ----
-  const [matForm, setMatForm] = useState({id:"",name:"",unit:"",unitPrice:"",company:"",cat1:"",cat2:"",cat3:""});
+  const [matForm, setMatForm] = useState({id:"",name:"",unit:"",unitPrice:"",companyId:"",catId:""});
   const [matViewMode, setMatViewMode] = useState("list"); // "list" | "category"
   const [matCatCmpView, setMatCatCmpView] = useState({});
   const [matCatOpen, setMatCatOpen] = useState({});
@@ -2123,13 +2147,22 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
   const [priceChangeMemo, setPriceChangeMemo] = useState("");
 
   // ---- 가공비 상태 ----
-  const [pcForm, setPcForm] = useState({id:"",name:"",unit:"",unitPrice:"",company:"",cat1:"",cat2:"",cat3:""});
+  const [pcForm, setPcForm] = useState({id:"",name:"",unit:"",unitPrice:"",companyId:"",catId:""});
   const [pcViewMode, setPcViewMode] = useState("list");
   const [pcCatCmpView, setPcCatCmpView] = useState({});
   const [pcCatOpen, setPcCatOpen] = useState({});
   const [pcEdit, setPcEdit] = useState(null);
   const [pcEditForm, setPcEditForm] = useState({});
   const [pcHistOpen, setPcHistOpen] = useState(null);
+
+  // ---- 카테고리/회사 헬퍼 ----
+  const getCatById = (id) => categories.find(c=>c.id===id)||{cat1:"",cat2:"",cat3:""};
+  const getCompById = (id) => companies.find(c=>c.id===id);
+  const cat1List = [...new Set(categories.map(c=>c.cat1))].filter(Boolean);
+  const cat2For = (c1) => [...new Set(categories.filter(c=>c.cat1===c1).map(c=>c.cat2))].filter(Boolean);
+  const cat3For = (c1,c2) => [...new Set(categories.filter(c=>c.cat1===c1&&c.cat2===c2).map(c=>c.cat3))].filter(Boolean);
+  const genCatId = () => "C"+String(categories.length+1).padStart(3,"0");
+  const genCoId  = () => "CO"+String(companies.length+1).padStart(3,"0");
 
   // ---- 완제품 상태 ----
   const [cpForm, setCpForm] = useState({id:"",name:"",unit:"개",laborCost:"",packagingCost:"",marginRate:"",materials:[],processing:[]});
@@ -2574,22 +2607,49 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
           <input style={{...S2.inp,width:90}} placeholder={genId()} value={form.id} onChange={e=>setForm(p=>({...p,id:e.target.value}))} maxLength={10}/>
           <input style={{...S2.inp,flex:2,minWidth:120}} placeholder="이름*" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))}/>
           <input style={{...S2.inp,width:60}} placeholder="단위" value={form.unit} onChange={e=>setForm(p=>({...p,unit:e.target.value}))}/>
-          <input style={{...S2.inp,width:100}} type="number" placeholder="단가(원)*" value={form.unitPrice} onChange={e=>setForm(p=>({...p,unitPrice:e.target.value}))}/>
+          <input style={{...S2.inp,width:110}} type="number" placeholder="단가(원)*" value={form.unitPrice} onChange={e=>setForm(p=>({...p,unitPrice:e.target.value}))}/>
         </div>
         <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-          <input style={{...S2.inp,flex:1,minWidth:100}} placeholder="🏢 회사명" value={form.company} onChange={e=>setForm(p=>({...p,company:e.target.value}))}/>
-          <input style={{...S2.inp,flex:1,minWidth:80}} placeholder="1차 카테고리" value={form.cat1} onChange={e=>setForm(p=>({...p,cat1:e.target.value}))}/>
-          <input style={{...S2.inp,flex:1,minWidth:80}} placeholder="2차 카테고리" value={form.cat2} onChange={e=>setForm(p=>({...p,cat2:e.target.value}))}/>
-          <input style={{...S2.inp,flex:1,minWidth:80}} placeholder="3차 카테고리" value={form.cat3} onChange={e=>setForm(p=>({...p,cat3:e.target.value}))}/>
+          <select style={{...S2.inp,flex:1,minWidth:110}} value={form.companyId||""} onChange={e=>setForm(p=>({...p,companyId:e.target.value}))}>
+            <option value="">🏢 회사 선택</option>
+            {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          {(()=>{
+            const selCat = categories.find(c=>c.id===form.catId)||{};
+            const c1list = [...new Set(categories.map(c=>c.cat1))].filter(Boolean);
+            const c2list = selCat.cat1 ? [...new Set(categories.filter(c=>c.cat1===selCat.cat1).map(c=>c.cat2))].filter(Boolean) : [];
+            const c3list = (selCat.cat1&&selCat.cat2) ? [...new Set(categories.filter(c=>c.cat1===selCat.cat1&&c.cat2===selCat.cat2).map(c=>c.cat3))].filter(Boolean) : [];
+            const handleC1 = (v) => setForm(p=>({...p,catId: categories.find(c=>c.cat1===v&&!c.cat2)?.id || categories.find(c=>c.cat1===v)?.id || "", _c1sel:v}));
+            const handleC2 = (v) => { const found=categories.find(c=>c.cat1===(selCat.cat1||form._c1sel)&&c.cat2===v); setForm(p=>({...p,catId:found?found.id:"",_c1sel:selCat.cat1||p._c1sel})); };
+            const handleC3 = (v) => { const found=categories.find(c=>c.cat1===selCat.cat1&&c.cat2===selCat.cat2&&c.cat3===v); if(found) setForm(p=>({...p,catId:found.id})); };
+            return (<>
+              <select style={{...S2.inp,flex:1,minWidth:90}} value={selCat.cat1||form._c1sel||""} onChange={e=>handleC1(e.target.value)}>
+                <option value="">1차 카테고리</option>
+                {c1list.map(v=><option key={v} value={v}>{v}</option>)}
+              </select>
+              {(selCat.cat1||form._c1sel) && <select style={{...S2.inp,flex:1,minWidth:90}} value={selCat.cat2||""} onChange={e=>handleC2(e.target.value)}>
+                <option value="">2차 카테고리</option>
+                {c2list.map(v=><option key={v} value={v}>{v}</option>)}
+              </select>}
+              {selCat.cat2 && c3list.length>0 && <select style={{...S2.inp,flex:1,minWidth:90}} value={selCat.cat3||""} onChange={e=>handleC3(e.target.value)}>
+                <option value="">3차 카테고리</option>
+                {c3list.map(v=><option key={v} value={v}>{v}</option>)}
+              </select>}
+            </>);
+          })()}
           <button style={{...S2.addBtn,padding:"7px 14px",whiteSpace:"nowrap"}} onClick={()=>{
             if(!form.name||!form.unitPrice){alert("이름과 단가를 입력하세요.");return;}
             const id=form.id||genId();
             if(items.find(x=>x.id===id)){alert("같은 ID가 이미 있습니다.");return;}
+            const cat=categories.find(c=>c.id===form.catId)||{};
+            const comp=companies.find(c=>c.id===form.companyId);
             setItems(p=>[...p,{id,name:form.name,unit:form.unit||"개",unitPrice:Number(form.unitPrice),
-              company:form.company||"",cat1:form.cat1||"",cat2:form.cat2||"",cat3:form.cat3||""}]);
-            setForm({id:"",name:"",unit:"",unitPrice:"",company:"",cat1:"",cat2:"",cat3:""});
+              companyId:form.companyId||"",company:comp?comp.name:"",
+              catId:form.catId||"",cat1:cat.cat1||"",cat2:cat.cat2||"",cat3:cat.cat3||""}]);
+            setForm({id:"",name:"",unit:"",unitPrice:"",companyId:"",catId:"",_c1sel:""});
           }}>+ 추가</button>
         </div>
+        {categories.length===0&&<div style={{marginTop:6,fontSize:12,color:"#e65100"}}>⚠️ 카테고리가 없습니다. <button style={{background:"none",border:"none",color:"#1565c0",cursor:"pointer",fontWeight:600,fontSize:12}} onClick={()=>setTab("catmgmt")}>카테고리/회사 관리</button>에서 먼저 추가하세요.</div>}
       </div>
       {/* 목록 */}
       {items.length===0&&<div style={{...S.card,padding:20,textAlign:"center",color:"#aaa"}}>등록된 항목이 없습니다.</div>}
@@ -2603,17 +2663,43 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
                   <input style={{...S2.inp,flex:2}} value={editForm.name||""} onChange={e=>setEditForm(p=>({...p,name:e.target.value}))}/>
                   <input style={{...S2.inp,width:60}} value={editForm.unit||""} onChange={e=>setEditForm(p=>({...p,unit:e.target.value}))}/>
                   <button style={S2.iconBtn("#2e7d32")} onClick={()=>{
+                    const cat=categories.find(c=>c.id===editForm.catId)||{};
+                    const comp=companies.find(c=>c.id===editForm.companyId);
                     setItems(p=>p.map(x=>x.id===item.id?{...x,name:editForm.name,unit:editForm.unit,
-                      company:editForm.company||"",cat1:editForm.cat1||"",cat2:editForm.cat2||"",cat3:editForm.cat3||""}:x));
+                      companyId:editForm.companyId||"",company:comp?comp.name:"",
+                      catId:editForm.catId||"",cat1:cat.cat1||"",cat2:cat.cat2||"",cat3:cat.cat3||""}:x));
                     setEditId(null);
                   }}>✔저장</button>
                   <button style={S2.iconBtn("#999")} onClick={()=>setEditId(null)}>✖</button>
                 </div>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                  <input style={{...S2.inp,flex:1,minWidth:90}} placeholder="회사명" value={editForm.company||""} onChange={e=>setEditForm(p=>({...p,company:e.target.value}))}/>
-                  <input style={{...S2.inp,flex:1,minWidth:80}} placeholder="1차 카테고리" value={editForm.cat1||""} onChange={e=>setEditForm(p=>({...p,cat1:e.target.value}))}/>
-                  <input style={{...S2.inp,flex:1,minWidth:80}} placeholder="2차 카테고리" value={editForm.cat2||""} onChange={e=>setEditForm(p=>({...p,cat2:e.target.value}))}/>
-                  <input style={{...S2.inp,flex:1,minWidth:80}} placeholder="3차 카테고리" value={editForm.cat3||""} onChange={e=>setEditForm(p=>({...p,cat3:e.target.value}))}/>
+                  <select style={{...S2.inp,flex:1,minWidth:110}} value={editForm.companyId||""} onChange={e=>setEditForm(p=>({...p,companyId:e.target.value}))}>
+                    <option value="">🏢 회사 선택</option>
+                    {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  {(()=>{
+                    const selCat=categories.find(c=>c.id===editForm.catId)||{};
+                    const c1list=[...new Set(categories.map(c=>c.cat1))].filter(Boolean);
+                    const c2list=selCat.cat1?[...new Set(categories.filter(c=>c.cat1===selCat.cat1).map(c=>c.cat2))].filter(Boolean):[];
+                    const c3list=(selCat.cat1&&selCat.cat2)?[...new Set(categories.filter(c=>c.cat1===selCat.cat1&&c.cat2===selCat.cat2).map(c=>c.cat3))].filter(Boolean):[];
+                    const handleC1e=(v)=>setEditForm(p=>({...p,catId:categories.find(c=>c.cat1===v)?.id||"",_ec1:v}));
+                    const handleC2e=(v)=>{const f=categories.find(c=>c.cat1===(selCat.cat1||editForm._ec1)&&c.cat2===v);setEditForm(p=>({...p,catId:f?f.id:""}));};
+                    const handleC3e=(v)=>{const f=categories.find(c=>c.cat1===selCat.cat1&&c.cat2===selCat.cat2&&c.cat3===v);if(f)setEditForm(p=>({...p,catId:f.id}));};
+                    return (<>
+                      <select style={{...S2.inp,flex:1,minWidth:90}} value={selCat.cat1||editForm._ec1||""} onChange={e=>handleC1e(e.target.value)}>
+                        <option value="">1차 카테고리</option>
+                        {c1list.map(v=><option key={v} value={v}>{v}</option>)}
+                      </select>
+                      {(selCat.cat1||editForm._ec1)&&<select style={{...S2.inp,flex:1,minWidth:90}} value={selCat.cat2||""} onChange={e=>handleC2e(e.target.value)}>
+                        <option value="">2차 카테고리</option>
+                        {c2list.map(v=><option key={v} value={v}>{v}</option>)}
+                      </select>}
+                      {selCat.cat2&&c3list.length>0&&<select style={{...S2.inp,flex:1,minWidth:90}} value={selCat.cat3||""} onChange={e=>handleC3e(e.target.value)}>
+                        <option value="">3차 카테고리</option>
+                        {c3list.map(v=><option key={v} value={v}>{v}</option>)}
+                      </select>}
+                    </>);
+                  })()}
                 </div>
               </div>
             ) : (
@@ -2623,7 +2709,7 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
                   <span style={{fontWeight:700,flex:2,minWidth:100}}>{item.name}</span>
                   <span style={{color:"#888",fontSize:12}}>{item.unit}</span>
                   <span style={{fontWeight:700,color:"#1565c0",minWidth:80,textAlign:"right"}}>{fmt(item.unitPrice)}원</span>
-                  <button style={S2.iconBtn("#1565c0")} onClick={()=>{setEditId(item.id);setEditForm({name:item.name,unit:item.unit,company:item.company||"",cat1:item.cat1||"",cat2:item.cat2||"",cat3:item.cat3||""});}}>편집</button>
+                  <button style={S2.iconBtn("#1565c0")} onClick={()=>{setEditId(item.id);setEditForm({name:item.name,unit:item.unit,companyId:item.companyId||"",catId:item.catId||""});}}>편집</button>
                   <button style={S2.iconBtn("#c62828")} onClick={()=>{if(window.confirm("삭제할까요?"))setItems(p=>p.filter(x=>x.id!==item.id));}}>삭제</button>
                 </div>
                 <div style={{display:"flex",gap:6,marginTop:4,flexWrap:"wrap"}}>
@@ -2902,15 +2988,128 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
     );
   };
 
+  // ---- 카테고리/회사 관리 탭 ----
+  const renderCatMgmt = () => {
+    const tree = {};
+    categories.forEach(c => {
+      if(!tree[c.cat1]) tree[c.cat1]={};
+      if(!tree[c.cat1][c.cat2]) tree[c.cat1][c.cat2]=[];
+      if(c.cat3) tree[c.cat1][c.cat2].push(c);
+    });
+    const catSel = categories.find(c=>c.id===catForm.catId)||{};
+    return (
+      <div>
+        <div style={{display:"flex",gap:6,marginBottom:14}}>
+          <button style={{...S2.tab(catMgmtView==="category"),borderRadius:7}} onClick={()=>setCatMgmtView("category")}>🗂️ 카테고리 관리</button>
+          <button style={{...S2.tab(catMgmtView==="company"),borderRadius:7}} onClick={()=>setCatMgmtView("company")}>🏢 회사 관리</button>
+        </div>
+        {catMgmtView==="category" && (
+          <div>
+            {/* 카테고리 추가 폼 */}
+            <div style={{...S.card,padding:12,background:"#f0f4ff",marginBottom:12}}>
+              <div style={{fontWeight:700,fontSize:13,color:"#1a237e",marginBottom:8}}>+ 카테고리 추가</div>
+              <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                <input style={{...S2.inp,flex:1,minWidth:90}} placeholder="1차 카테고리*" value={catForm.cat1} onChange={e=>setCatForm(p=>({...p,cat1:e.target.value}))}/>
+                <input style={{...S2.inp,flex:1,minWidth:90}} placeholder="2차 카테고리" value={catForm.cat2} onChange={e=>setCatForm(p=>({...p,cat2:e.target.value}))}/>
+                <input style={{...S2.inp,flex:1,minWidth:90}} placeholder="3차 카테고리 (선택)" value={catForm.cat3} onChange={e=>setCatForm(p=>({...p,cat3:e.target.value}))}/>
+                <button style={{...S2.addBtn,padding:"7px 14px"}} onClick={()=>{
+                  if(!catForm.cat1){alert("1차 카테고리를 입력하세요.");return;}
+                  const id=genCatId();
+                  setCategories(p=>[...p,{id,cat1:catForm.cat1.trim(),cat2:catForm.cat2.trim()||"",cat3:catForm.cat3.trim()||""}]);
+                  setCatForm({cat1:"",cat2:"",cat3:""});
+                }}>추가</button>
+              </div>
+            </div>
+            {/* 카테고리 트리 */}
+            {categories.length===0&&<div style={{...S.card,padding:20,textAlign:"center",color:"#aaa"}}>카테고리가 없습니다. 위에서 추가하세요.</div>}
+            {[...new Set(categories.map(c=>c.cat1))].filter(Boolean).map(c1=>{
+              const c1open=catMgmtOpen[c1];
+              const c1items=categories.filter(c=>c.cat1===c1);
+              return (
+                <div key={c1} style={{marginBottom:8,border:"1px solid #e0e4f0",borderRadius:8,overflow:"hidden"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"linear-gradient(90deg,#1a237e,#283593)",color:"#fff",cursor:"pointer"}}
+                    onClick={()=>setCatMgmtOpen(p=>({...p,[c1]:!p[c1]}))}>
+                    <span>{c1open?"▼":"▶"}</span>
+                    <span style={{fontWeight:700,flex:1,fontSize:15}}>{c1}</span>
+                    <span style={{fontSize:12,opacity:0.8}}>{c1items.length}개</span>
+                    <button style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}
+                      onClick={e=>{e.stopPropagation();if(window.confirm(`'${c1}' 전체 삭제할까요?`)){setCategories(p=>p.filter(c=>c.cat1!==c1));}}}>전체 삭제</button>
+                  </div>
+                  {c1open && (
+                    <div style={{padding:"8px 14px"}}>
+                      {c1items.map(c=>(
+                        <div key={c.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid #f4f5f7"}}>
+                          {catEditId===c.id ? (<>
+                            <input style={{...S2.inp,flex:1,minWidth:80}} placeholder="2차" value={catEditForm.cat2||""} onChange={e=>setCatEditForm(p=>({...p,cat2:e.target.value}))}/>
+                            <input style={{...S2.inp,flex:1,minWidth:80}} placeholder="3차(선택)" value={catEditForm.cat3||""} onChange={e=>setCatEditForm(p=>({...p,cat3:e.target.value}))}/>
+                            <button style={S2.iconBtn("#2e7d32")} onClick={()=>{setCategories(p=>p.map(x=>x.id===c.id?{...x,cat2:catEditForm.cat2||"",cat3:catEditForm.cat3||""}:x));setCatEditId(null);}}>✔저장</button>
+                            <button style={S2.iconBtn("#999")} onClick={()=>setCatEditId(null)}>✖</button>
+                          </>) : (<>
+                            <span style={{flex:1,fontSize:13}}>{c.cat2||"(없음)"}{c.cat3&&<span style={{color:"#6a1b9a",marginLeft:6}}>▶ {c.cat3}</span>}</span>
+                            <span style={{fontSize:11,color:"#aaa"}}>{c.id}</span>
+                            <button style={S2.iconBtn("#1565c0")} onClick={()=>{setCatEditId(c.id);setCatEditForm({cat2:c.cat2,cat3:c.cat3});}}>편집</button>
+                            <button style={S2.iconBtn("#c62828")} onClick={()=>{if(window.confirm("삭제할까요?"))setCategories(p=>p.filter(x=>x.id!==c.id));}}>삭제</button>
+                          </>)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {catMgmtView==="company" && (
+          <div>
+            {/* 회사 추가 폼 */}
+            <div style={{...S.card,padding:12,background:"#f0f4ff",marginBottom:12}}>
+              <div style={{fontWeight:700,fontSize:13,color:"#1a237e",marginBottom:8}}>+ 회사 추가</div>
+              <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                <input style={{...S2.inp,flex:2,minWidth:130}} placeholder="회사명*" value={compForm.name} onChange={e=>setCompForm(p=>({...p,name:e.target.value}))}/>
+                <input style={{...S2.inp,flex:3,minWidth:150}} placeholder="메모 (선택)" value={compForm.memo} onChange={e=>setCompForm(p=>({...p,memo:e.target.value}))}/>
+                <button style={{...S2.addBtn,padding:"7px 14px"}} onClick={()=>{
+                  if(!compForm.name){alert("회사명을 입력하세요.");return;}
+                  const id=genCoId();
+                  setCompanies(p=>[...p,{id,name:compForm.name.trim(),memo:compForm.memo.trim()}]);
+                  setCompForm({name:"",memo:""});
+                }}>추가</button>
+              </div>
+            </div>
+            {/* 회사 목록 */}
+            {companies.length===0&&<div style={{...S.card,padding:20,textAlign:"center",color:"#aaa"}}>등록된 회사가 없습니다. 위에서 추가하세요.</div>}
+            {companies.map(co=>(
+              <div key={co.id} style={{...S.card,marginBottom:6,padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
+                {compEditId===co.id ? (<>
+                  <input style={{...S2.inp,flex:2}} value={compEditForm.name||""} onChange={e=>setCompEditForm(p=>({...p,name:e.target.value}))}/>
+                  <input style={{...S2.inp,flex:3}} placeholder="메모" value={compEditForm.memo||""} onChange={e=>setCompEditForm(p=>({...p,memo:e.target.value}))}/>
+                  <button style={S2.iconBtn("#2e7d32")} onClick={()=>{setCompanies(p=>p.map(x=>x.id===co.id?{...x,name:compEditForm.name,memo:compEditForm.memo}:x));setCompEditId(null);}}>✔저장</button>
+                  <button style={S2.iconBtn("#999")} onClick={()=>setCompEditId(null)}>✖</button>
+                </>) : (<>
+                  <span style={{fontSize:12,color:"#aaa",minWidth:50}}>{co.id}</span>
+                  <span style={{fontWeight:700,flex:2,fontSize:14}}>🏢 {co.name}</span>
+                  <span style={{color:"#888",fontSize:12,flex:3}}>{co.memo||""}</span>
+                  <button style={S2.iconBtn("#1565c0")} onClick={()=>{setCompEditId(co.id);setCompEditForm({name:co.name,memo:co.memo});}}>편집</button>
+                  <button style={S2.iconBtn("#c62828")} onClick={()=>{if(window.confirm("삭제할까요?"))setCompanies(p=>p.filter(x=>x.id!==co.id));}}>삭제</button>
+                </>)}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div>
       <h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>원가계산</h2>
       <div style={{marginBottom:16,display:"flex",flexWrap:"wrap",gap:4}}>
+        <button style={S2.tab(tab==="catmgmt")} onClick={()=>setTab("catmgmt")}>🏷️ 카테고리/회사</button>
         <button style={S2.tab(tab==="materials")} onClick={()=>setTab("materials")}>원자재 관리</button>
         <button style={S2.tab(tab==="processing")} onClick={()=>setTab("processing")}>가공비 관리</button>
         <button style={S2.tab(tab==="products")} onClick={()=>setTab("products")}>완제품 원가</button>
         <button style={S2.tab(tab==="history")} onClick={()=>setTab("history")}>가격변동 이력</button>
       </div>
+      {tab==="catmgmt"&&renderCatMgmt()}
       {tab==="materials"&&renderMaterials()}
       {tab==="processing"&&renderProcessing()}
       {tab==="products"&&renderProducts()}
@@ -2945,6 +3144,8 @@ function App({user, localMode}) {
   const [costProducts,setCostProducts]=usePersist("costProducts",INIT_COST_PRODUCTS);
   const [processingCosts,setProcessingCosts]=usePersist("processingCosts",INIT_PROCESSING_COSTS);
   const [priceHistory,setPriceHistory]=usePersist("priceHistory",INIT_PRICE_HISTORY);
+  const [categories,setCategories]=usePersist("categories",INIT_CATEGORIES);
+  const [companies,setCompanies]=usePersist("companies",INIT_COMPANIES);
   const [sidebarOpen,setSidebarOpen]=useState(false);
 
   // 자동 백업 타이머: 매분 체크, 0시~0시 5분이고 오늘 아직 안 했으면 실행
@@ -2992,7 +3193,7 @@ function App({user, localMode}) {
     case "accounts": return <AccountsMgmt accounts={accounts}/>;
     case "products": return <ProductMgmt products={products} setProducts={setProducts}/>;
     case "partnerPrice": return <PartnerPricePage partners={partners} products={products} partnerPrices={partnerPrices} setPartnerPrices={setPartnerPrices}/>;
-    case "costCalc": return <CostCalcPage materials={materials} setMaterials={setMaterials} costProducts={costProducts} setCostProducts={setCostProducts} processingCosts={processingCosts} setProcessingCosts={setProcessingCosts} priceHistory={priceHistory} setPriceHistory={setPriceHistory}/>;
+    case "costCalc": return <CostCalcPage materials={materials} setMaterials={setMaterials} costProducts={costProducts} setCostProducts={setCostProducts} processingCosts={processingCosts} setProcessingCosts={setProcessingCosts} priceHistory={priceHistory} setPriceHistory={setPriceHistory} categories={categories} setCategories={setCategories} companies={companies} setCompanies={setCompanies}/>;
     case "bizSettings": return <BizSettings myBiz={myBiz} setMyBiz={setMyBiz}/>;
     case "backup": return <BackupRestore partners={partners} vouchers={vouchers} statements={statements} taxInvoices={taxInvoices} products={products} partnerPrices={partnerPrices} myBiz={myBiz} menuOrder={menuOrder} hiddenMenus={hiddenMenus} setPartners={setPartners} setVouchers={setVouchers} setStatements={setStatements} setTaxInvoices={setTaxInvoices} setProducts={setProducts} setPartnerPrices={setPartnerPrices} setMyBiz={setMyBiz} setMenuOrder={setMenuOrder} setHiddenMenus={setHiddenMenus} autoBackup={autoBackup} setAutoBackup={setAutoBackup} lastAutoBackup={lastAutoBackup} setLastAutoBackup={setLastAutoBackup} localMode={localMode}/>;
     default: return <Dashboard vouchers={vouchers} accounts={accounts} statements={statements} taxInvoices={taxInvoices}/>;
