@@ -458,9 +458,12 @@ const INIT_COST_PRODUCTS = [
     processing:[{processingId:"PC002",qty:2}]},
 ];
 const INIT_PROCESSING_COSTS = [
-  {id:"PC001",name:"절삭 가공",unit:"개",unitPrice:3000},
-  {id:"PC002",name:"도장",unit:"개",unitPrice:2000},
-  {id:"PC003",name:"조립",unit:"개",unitPrice:1500},
+  {id:"PC001",name:"피그먼트",unit:"야드",unitPrice:1200,company:"",cat1:"염색",cat2:"피그먼트",cat3:""},
+  {id:"PC002",name:"동판나염",unit:"야드",unitPrice:800,company:"",cat1:"염색",cat2:"동판나염",cat3:""},
+  {id:"PC003",name:"DTP",unit:"야드",unitPrice:1500,company:"",cat1:"염색",cat2:"DTP",cat3:""},
+  {id:"PC004",name:"전사나염",unit:"야드",unitPrice:1100,company:"",cat1:"염색",cat2:"전사나염",cat3:""},
+  {id:"PC005",name:"1인치 샤틀식",unit:"야드",unitPrice:900,company:"",cat1:"누비",cat2:"1인치 샤틀식",cat3:""},
+  {id:"PC006",name:"2인치 가마식",unit:"야드",unitPrice:700,company:"",cat1:"누비",cat2:"2인치 가마식",cat3:""},
 ];
 const INIT_PRICE_HISTORY = {materials:{},processing:{}};
 const fmt = n => (n||0).toLocaleString("ko-KR");
@@ -2110,14 +2113,20 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
   const [tab, setTab] = useState("materials"); // "materials"|"processing"|"products"|"history"
 
   // ---- 원자재 상태 ----
-  const [matForm, setMatForm] = useState({id:"",name:"",unit:"",unitPrice:""});
+  const [matForm, setMatForm] = useState({id:"",name:"",unit:"",unitPrice:"",company:"",cat1:"",cat2:"",cat3:""});
+  const [matViewMode, setMatViewMode] = useState("list"); // "list" | "category"
+  const [matCatCmpView, setMatCatCmpView] = useState({});
+  const [matCatOpen, setMatCatOpen] = useState({});
   const [matEdit, setMatEdit] = useState(null);
   const [matEditForm, setMatEditForm] = useState({});
   const [matHistOpen, setMatHistOpen] = useState(null); // 이력 열린 id
   const [priceChangeMemo, setPriceChangeMemo] = useState("");
 
   // ---- 가공비 상태 ----
-  const [pcForm, setPcForm] = useState({id:"",name:"",unit:"",unitPrice:""});
+  const [pcForm, setPcForm] = useState({id:"",name:"",unit:"",unitPrice:"",company:"",cat1:"",cat2:"",cat3:""});
+  const [pcViewMode, setPcViewMode] = useState("list");
+  const [pcCatCmpView, setPcCatCmpView] = useState({});
+  const [pcCatOpen, setPcCatOpen] = useState({});
   const [pcEdit, setPcEdit] = useState(null);
   const [pcEditForm, setPcEditForm] = useState({});
   const [pcHistOpen, setPcHistOpen] = useState(null);
@@ -2216,11 +2225,11 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
   // ---- 원자재 엑셀 다운로드 ----
   const downloadMatXlsx = () => {
     const wb = XLSX.utils.book_new();
-    const rows = [["ID","원자재명","단위","현재단가(원)"],...materials.map(m=>[m.id,m.name,m.unit,m.unitPrice])];
+    const rows = [["ID","원자재명","단위","현재단가(원)","회사명","1차카테고리","2차카테고리","3차카테고리"],
+      ...materials.map(m=>[m.id,m.name,m.unit,m.unitPrice,m.company||"",m.cat1||"",m.cat2||"",m.cat3||""])];
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws["!cols"]=[{wch:10},{wch:20},{wch:8},{wch:14}];
+    ws["!cols"]=[{wch:10},{wch:20},{wch:8},{wch:14},{wch:16},{wch:14},{wch:14},{wch:14}];
     XLSX.utils.book_append_sheet(wb,ws,"원자재목록");
-    // 가격 이력 시트
     const hdr2=["ID","원자재명","변경일","변경전단가","변경후단가","메모"];
     const rows2=[hdr2];
     materials.forEach(m=>{
@@ -2246,7 +2255,7 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
         const newMats = [];
         for(let i=1;i<rows.length;i++){
           const r=rows[i]; if(!r[1])continue;
-          newMats.push({id:r[0]||("MAT"+String(Date.now()+i).slice(-5)),name:String(r[1]||""),unit:String(r[2]||"개"),unitPrice:Number(r[3]||0)});
+          newMats.push({id:r[0]||("MAT"+String(Date.now()+i).slice(-5)),name:String(r[1]||""),unit:String(r[2]||"개"),unitPrice:Number(r[3]||0),company:String(r[4]||""),cat1:String(r[5]||""),cat2:String(r[6]||""),cat3:String(r[7]||"")});
         }
         if(newMats.length>0){setMaterials(newMats);alert(newMats.length+"개 원자재를 불러왔습니다.");}
       } catch(err){alert("파일을 읽을 수 없습니다.");}
@@ -2257,9 +2266,10 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
   // ---- 가공비 엑셀 다운로드 ----
   const downloadPcXlsx = () => {
     const wb = XLSX.utils.book_new();
-    const rows = [["ID","가공비명","단위","현재단가(원)"],...processingCosts.map(p=>[p.id,p.name,p.unit,p.unitPrice])];
+    const rows = [["ID","가공비명","단위","현재단가(원)","회사명","1차카테고리","2차카테고리","3차카테고리"],
+      ...processingCosts.map(p=>[p.id,p.name,p.unit,p.unitPrice,p.company||"",p.cat1||"",p.cat2||"",p.cat3||""])];
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws["!cols"]=[{wch:10},{wch:20},{wch:8},{wch:14}];
+    ws["!cols"]=[{wch:10},{wch:20},{wch:8},{wch:14},{wch:16},{wch:14},{wch:14},{wch:14}];
     XLSX.utils.book_append_sheet(wb,ws,"가공비목록");
     const hdr2=["ID","가공비명","변경일","변경전단가","변경후단가","메모"];
     const rows2=[hdr2];
@@ -2286,7 +2296,7 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
         const newPcs = [];
         for(let i=1;i<rows.length;i++){
           const r=rows[i]; if(!r[1])continue;
-          newPcs.push({id:r[0]||("PC"+String(Date.now()+i).slice(-5)),name:String(r[1]||""),unit:String(r[2]||"개"),unitPrice:Number(r[3]||0)});
+          newPcs.push({id:r[0]||("PC"+String(Date.now()+i).slice(-5)),name:String(r[1]||""),unit:String(r[2]||"개"),unitPrice:Number(r[3]||0),company:String(r[4]||""),cat1:String(r[5]||""),cat2:String(r[6]||""),cat3:String(r[7]||"")});
         }
         if(newPcs.length>0){setProcessingCosts(newPcs);alert(newPcs.length+"개 가공비를 불러왔습니다.");}
       } catch(err){alert("파일을 읽을 수 없습니다.");}
@@ -2435,55 +2445,203 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
     );
   };
 
+  // ---- 카테고리 트리 뷰 컴포넌트 ----
+  const CategoryTreeView = ({items, catOpen, setCatOpen, catCmpView, setCatCmpView}) => {
+    const tree = {};
+    items.forEach(it => {
+      const c1 = it.cat1||"(미분류)";
+      const c2 = it.cat2||"(미분류)";
+      if(!tree[c1]) tree[c1] = {};
+      if(!tree[c1][c2]) tree[c1][c2] = [];
+      tree[c1][c2].push(it);
+    });
+    const toggle = (key) => setCatOpen(p=>({...p,[key]:!p[key]}));
+    const toggleCmp = (key) => setCatCmpView(p=>({...p,[key]:!p[key]}));
+    if(Object.keys(tree).length===0) return <div style={{...S.card,padding:20,textAlign:"center",color:"#aaa"}}>카테고리가 설정된 항목이 없습니다. 목록 보기에서 1차/2차 카테고리를 입력하세요.</div>;
+    return (
+      <div>
+        {Object.entries(tree).map(([c1, c2map]) => {
+          const allCount = Object.values(c2map).reduce((s,v)=>s+v.length,0);
+          const c1open = catOpen[c1];
+          return (
+            <div key={c1} style={{marginBottom:8}}>
+              <div onClick={()=>toggle(c1)} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 16px",background:"linear-gradient(90deg,#1a237e,#283593)",color:"#fff",borderRadius:8,cursor:"pointer",userSelect:"none"}}>
+                <span style={{fontSize:14}}>{c1open?"▼":"▶"}</span>
+                <span style={{fontWeight:700,fontSize:16,flex:1}}>{c1}</span>
+                <span style={{fontSize:12,opacity:0.75,background:"rgba(255,255,255,0.15)",padding:"2px 8px",borderRadius:10}}>{allCount}개</span>
+              </div>
+              {c1open && (
+                <div style={{marginLeft:16,marginTop:4}}>
+                  {Object.entries(c2map).map(([c2, citems]) => {
+                    const c2key = c1+"||"+c2;
+                    const c2open = catOpen[c2key];
+                    const showCmp = catCmpView[c2key];
+                    const byCompany = {};
+                    citems.forEach(it => {
+                      const co = it.company||"(회사 미등록)";
+                      if(!byCompany[co]) byCompany[co]=[];
+                      byCompany[co].push(it);
+                    });
+                    const hasCat3 = citems.some(it=>it.cat3);
+                    return (
+                      <div key={c2} style={{marginBottom:5,border:"1px solid #e0e4f0",borderRadius:7,overflow:"hidden"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 14px",background:"#f0f4ff",cursor:"pointer",userSelect:"none"}} onClick={()=>toggle(c2key)}>
+                          <span style={{color:"#1a237e",fontSize:13}}>{c2open?"▼":"▶"}</span>
+                          <span style={{fontWeight:600,flex:1,color:"#1a237e",fontSize:14}}>{c2}</span>
+                          <span style={{fontSize:11,color:"#888"}}>{citems.length}개</span>
+                          <button style={{background:showCmp?"#1a237e":"#fff",color:showCmp?"#fff":"#1a237e",border:"1px solid #1a237e",borderRadius:5,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer"}}
+                            onClick={(e)=>{e.stopPropagation();toggleCmp(c2key);}}>
+                            🏢 회사별 단가
+                          </button>
+                        </div>
+                        {showCmp && (
+                          <div style={{padding:"10px 14px",background:"#fff",borderTop:"1px solid #e8eaf0"}}>
+                            <div style={{fontSize:12,fontWeight:700,color:"#1a237e",marginBottom:8}}>📊 회사별 단가 비교 — {c1} &gt; {c2}</div>
+                            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                              <thead><tr>
+                                <th style={S2.th}>회사명</th>
+                                <th style={S2.th}>항목명</th>
+                                {hasCat3&&<th style={S2.th}>3차 분류</th>}
+                                <th style={{...S2.th,textAlign:"right"}}>단가</th>
+                                <th style={S2.th}>단위</th>
+                              </tr></thead>
+                              <tbody>
+                                {Object.entries(byCompany).map(([co,coItems],ci)=>
+                                  coItems.map((it,ii)=>(
+                                    <tr key={it.id} style={{background:ci%2===0?"#fff":"#f8f9ff"}}>
+                                      {ii===0&&<td style={{...S2.td,fontWeight:700,verticalAlign:"top",borderRight:"2px solid #e0e4f0",color:"#1565c0"}} rowSpan={coItems.length}>{co}</td>}
+                                      <td style={S2.td}>{it.name}</td>
+                                      {hasCat3&&<td style={{...S2.td,color:"#888"}}>{it.cat3||"-"}</td>}
+                                      <td style={{...S2.td,textAlign:"right",fontWeight:700,color:"#c62828",fontSize:13}}>{fmt(it.unitPrice)}원</td>
+                                      <td style={{...S2.td,color:"#888"}}>{it.unit}</td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                        {c2open && (
+                          <div style={{padding:"8px 14px"}}>
+                            {citems.map(it=>(
+                              <div key={it.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid #f4f5f7"}}>
+                                <span style={{fontSize:11,color:"#aaa",minWidth:55}}>{it.id}</span>
+                                <span style={{flex:1,fontWeight:600,fontSize:13}}>{it.name}</span>
+                                {it.cat3&&<span style={{fontSize:11,color:"#6a1b9a",background:"#f3e5f5",padding:"1px 7px",borderRadius:10}}>{it.cat3}</span>}
+                                {it.company&&<span style={{fontSize:11,color:"#1565c0",background:"#e3f2fd",padding:"1px 7px",borderRadius:10}}>🏢 {it.company}</span>}
+                                <span style={{fontWeight:700,color:"#1565c0",minWidth:70,textAlign:"right"}}>{fmt(it.unitPrice)}원</span>
+                                <span style={{fontSize:12,color:"#888"}}>{it.unit}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   // 원자재/가공비 공통 목록 렌더러
   const renderItemList = ({items, setItems, form, setForm, editId, setEditId, editForm, setEditForm,
-    histOpen, setHistOpen, kind, genId, uploadFn, downloadFn, title, idPrefix}) => (
+    histOpen, setHistOpen, viewMode, setViewMode, catOpen, setCatOpen, catCmpView, setCatCmpView,
+    kind, genId, uploadFn, downloadFn, title, idPrefix}) => (
     <div>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,flexWrap:"wrap"}}>
         <h3 style={{fontSize:16,fontWeight:700,color:"#1a1a2e",flex:1}}>{title}</h3>
+        <div style={{display:"flex",gap:3,background:"#f0f0f0",borderRadius:7,padding:3}}>
+          <button style={{padding:"5px 12px",borderRadius:5,border:"none",cursor:"pointer",fontWeight:600,fontSize:12,
+            background:viewMode==="list"?"#1a237e":"transparent",color:viewMode==="list"?"#fff":"#555"}}
+            onClick={()=>setViewMode("list")}>📋 목록</button>
+          <button style={{padding:"5px 12px",borderRadius:5,border:"none",cursor:"pointer",fontWeight:600,fontSize:12,
+            background:viewMode==="category"?"#1a237e":"transparent",color:viewMode==="category"?"#fff":"#555"}}
+            onClick={()=>setViewMode("category")}>🗂️ 카테고리</button>
+        </div>
         <label style={S2.xlsBtn("#1565c0")}><Upload size={13}/> 엑셀 업로드<input type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={uploadFn}/></label>
         <button style={S2.xlsBtn("#43a047")} onClick={downloadFn}><Download size={13}/> 엑셀 다운로드</button>
       </div>
+      {viewMode==="category" ? (
+        <CategoryTreeView items={items} catOpen={catOpen} setCatOpen={setCatOpen} catCmpView={catCmpView} setCatCmpView={setCatCmpView}/>
+      ) : (<>
       {/* 신규 추가 행 */}
-      <div style={{...S.card,padding:10,marginBottom:10,display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",background:"#f0f4ff"}}>
-        <input style={{...S2.inp,width:90}} placeholder={genId()} value={form.id} onChange={e=>setForm(p=>({...p,id:e.target.value}))} maxLength={10}/>
-        <input style={{...S2.inp,flex:2,minWidth:120}} placeholder="이름" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))}/>
-        <input style={{...S2.inp,width:60}} placeholder="단위" value={form.unit} onChange={e=>setForm(p=>({...p,unit:e.target.value}))}/>
-        <input style={{...S2.inp,width:100}} type="number" placeholder="단가(원)" value={form.unitPrice} onChange={e=>setForm(p=>({...p,unitPrice:e.target.value}))}/>
-        <button style={{...S2.addBtn,padding:"7px 14px"}} onClick={()=>{
-          if(!form.name||!form.unitPrice){alert("이름과 단가를 입력하세요.");return;}
-          const id=form.id||genId();
-          if(items.find(x=>x.id===id)){alert("같은 ID가 이미 있습니다.");return;}
-          setItems(p=>[...p,{id,name:form.name,unit:form.unit||"개",unitPrice:Number(form.unitPrice)}]);
-          setForm({id:"",name:"",unit:"",unitPrice:""});
-        }}>+ 추가</button>
+      <div style={{...S.card,padding:12,marginBottom:10,background:"#f0f4ff"}}>
+        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginBottom:6}}>
+          <input style={{...S2.inp,width:90}} placeholder={genId()} value={form.id} onChange={e=>setForm(p=>({...p,id:e.target.value}))} maxLength={10}/>
+          <input style={{...S2.inp,flex:2,minWidth:120}} placeholder="이름*" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))}/>
+          <input style={{...S2.inp,width:60}} placeholder="단위" value={form.unit} onChange={e=>setForm(p=>({...p,unit:e.target.value}))}/>
+          <input style={{...S2.inp,width:100}} type="number" placeholder="단가(원)*" value={form.unitPrice} onChange={e=>setForm(p=>({...p,unitPrice:e.target.value}))}/>
+        </div>
+        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+          <input style={{...S2.inp,flex:1,minWidth:100}} placeholder="🏢 회사명" value={form.company} onChange={e=>setForm(p=>({...p,company:e.target.value}))}/>
+          <input style={{...S2.inp,flex:1,minWidth:80}} placeholder="1차 카테고리" value={form.cat1} onChange={e=>setForm(p=>({...p,cat1:e.target.value}))}/>
+          <input style={{...S2.inp,flex:1,minWidth:80}} placeholder="2차 카테고리" value={form.cat2} onChange={e=>setForm(p=>({...p,cat2:e.target.value}))}/>
+          <input style={{...S2.inp,flex:1,minWidth:80}} placeholder="3차 카테고리" value={form.cat3} onChange={e=>setForm(p=>({...p,cat3:e.target.value}))}/>
+          <button style={{...S2.addBtn,padding:"7px 14px",whiteSpace:"nowrap"}} onClick={()=>{
+            if(!form.name||!form.unitPrice){alert("이름과 단가를 입력하세요.");return;}
+            const id=form.id||genId();
+            if(items.find(x=>x.id===id)){alert("같은 ID가 이미 있습니다.");return;}
+            setItems(p=>[...p,{id,name:form.name,unit:form.unit||"개",unitPrice:Number(form.unitPrice),
+              company:form.company||"",cat1:form.cat1||"",cat2:form.cat2||"",cat3:form.cat3||""}]);
+            setForm({id:"",name:"",unit:"",unitPrice:"",company:"",cat1:"",cat2:"",cat3:""});
+          }}>+ 추가</button>
+        </div>
       </div>
       {/* 목록 */}
       {items.length===0&&<div style={{...S.card,padding:20,textAlign:"center",color:"#aaa"}}>등록된 항목이 없습니다.</div>}
       {items.map(item=>(
         <div key={item.id} style={{...S.card,marginBottom:8,padding:0,overflow:"hidden"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"#f8f9ff"}}>
-            {editId===item.id ? <>
-              <span style={{fontSize:11,color:"#888",minWidth:60}}>{item.id}</span>
-              <input style={{...S2.inp,flex:2}} value={editForm.name} onChange={e=>setEditForm(p=>({...p,name:e.target.value}))}/>
-              <input style={{...S2.inp,width:60}} value={editForm.unit} onChange={e=>setEditForm(p=>({...p,unit:e.target.value}))}/>
-              <button style={S2.iconBtn("#2e7d32")} onClick={()=>{setItems(p=>p.map(x=>x.id===item.id?{...x,name:editForm.name,unit:editForm.unit}:x));setEditId(null);}}>✔저장</button>
-              <button style={S2.iconBtn("#999")} onClick={()=>setEditId(null)}>✖</button>
-            </> : <>
-              <span style={{fontSize:11,color:"#888",minWidth:60}}>{item.id}</span>
-              <span style={{fontWeight:700,flex:2}}>{item.name}</span>
-              <span style={{color:"#888",fontSize:12}}>{item.unit}</span>
-              <span style={{fontWeight:700,color:"#1565c0",minWidth:80,textAlign:"right"}}>{fmt(item.unitPrice)}원</span>
-              <button style={S2.iconBtn("#1565c0")} onClick={()=>{setEditId(item.id);setEditForm({name:item.name,unit:item.unit});}}>편집</button>
-              <button style={S2.iconBtn("#c62828")} onClick={()=>{if(window.confirm("삭제할까요?"))setItems(p=>p.filter(x=>x.id!==item.id));}}>삭제</button>
-            </>}
+          <div style={{padding:"10px 14px",background:"#f8f9ff"}}>
+            {editId===item.id ? (
+              <div>
+                <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginBottom:6}}>
+                  <span style={{fontSize:11,color:"#888",minWidth:60}}>{item.id}</span>
+                  <input style={{...S2.inp,flex:2}} value={editForm.name||""} onChange={e=>setEditForm(p=>({...p,name:e.target.value}))}/>
+                  <input style={{...S2.inp,width:60}} value={editForm.unit||""} onChange={e=>setEditForm(p=>({...p,unit:e.target.value}))}/>
+                  <button style={S2.iconBtn("#2e7d32")} onClick={()=>{
+                    setItems(p=>p.map(x=>x.id===item.id?{...x,name:editForm.name,unit:editForm.unit,
+                      company:editForm.company||"",cat1:editForm.cat1||"",cat2:editForm.cat2||"",cat3:editForm.cat3||""}:x));
+                    setEditId(null);
+                  }}>✔저장</button>
+                  <button style={S2.iconBtn("#999")} onClick={()=>setEditId(null)}>✖</button>
+                </div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  <input style={{...S2.inp,flex:1,minWidth:90}} placeholder="회사명" value={editForm.company||""} onChange={e=>setEditForm(p=>({...p,company:e.target.value}))}/>
+                  <input style={{...S2.inp,flex:1,minWidth:80}} placeholder="1차 카테고리" value={editForm.cat1||""} onChange={e=>setEditForm(p=>({...p,cat1:e.target.value}))}/>
+                  <input style={{...S2.inp,flex:1,minWidth:80}} placeholder="2차 카테고리" value={editForm.cat2||""} onChange={e=>setEditForm(p=>({...p,cat2:e.target.value}))}/>
+                  <input style={{...S2.inp,flex:1,minWidth:80}} placeholder="3차 카테고리" value={editForm.cat3||""} onChange={e=>setEditForm(p=>({...p,cat3:e.target.value}))}/>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <span style={{fontSize:11,color:"#888",minWidth:60}}>{item.id}</span>
+                  <span style={{fontWeight:700,flex:2,minWidth:100}}>{item.name}</span>
+                  <span style={{color:"#888",fontSize:12}}>{item.unit}</span>
+                  <span style={{fontWeight:700,color:"#1565c0",minWidth:80,textAlign:"right"}}>{fmt(item.unitPrice)}원</span>
+                  <button style={S2.iconBtn("#1565c0")} onClick={()=>{setEditId(item.id);setEditForm({name:item.name,unit:item.unit,company:item.company||"",cat1:item.cat1||"",cat2:item.cat2||"",cat3:item.cat3||""});}}>편집</button>
+                  <button style={S2.iconBtn("#c62828")} onClick={()=>{if(window.confirm("삭제할까요?"))setItems(p=>p.filter(x=>x.id!==item.id));}}>삭제</button>
+                </div>
+                <div style={{display:"flex",gap:6,marginTop:4,flexWrap:"wrap"}}>
+                  {item.company&&<span style={{fontSize:11,color:"#1565c0",background:"#e3f2fd",padding:"1px 8px",borderRadius:10}}>🏢 {item.company}</span>}
+                  {item.cat1&&<span style={{fontSize:11,color:"#555",background:"#f4f5f7",padding:"1px 8px",borderRadius:10}}>{item.cat1}</span>}
+                  {item.cat2&&<span style={{fontSize:11,color:"#555",background:"#f4f5f7",padding:"1px 8px",borderRadius:10,borderLeft:"2px solid #1a237e"}}>▶ {item.cat2}</span>}
+                  {item.cat3&&<span style={{fontSize:11,color:"#6a1b9a",background:"#f3e5f5",padding:"1px 8px",borderRadius:10,borderLeft:"2px solid #6a1b9a"}}>▶▶ {item.cat3}</span>}
+                </div>
+              </div>
+            )}
           </div>
           <div style={{padding:"6px 14px 10px"}}>
             <PriceChangeRow kind={kind} item={item} histOpen={histOpen} setHistOpen={setHistOpen}/>
           </div>
         </div>
       ))}
-      <div style={{marginTop:6,fontSize:12,color:"#888"}}>💡 엑셀 양식: ID | 이름 | 단위 | 단가(원)</div>
+      <div style={{marginTop:6,fontSize:12,color:"#888"}}>💡 엑셀 양식: ID | 이름 | 단위 | 단가(원) | 회사명 | 1차카테고리 | 2차카테고리 | 3차카테고리</div>
+      </>)}
     </div>
   );
 
@@ -2491,8 +2649,11 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
   const renderMaterials = () => renderItemList({
     items:materials, setItems:setMaterials, form:matForm, setForm:setMatForm,
     editId:matEdit, setEditId:setMatEdit, editForm:matEditForm, setEditForm:setMatEditForm,
-    histOpen:matHistOpen, setHistOpen:setMatHistOpen, kind:"materials",
-    genId:genMatId, uploadFn:uploadMatXlsx, downloadFn:downloadMatXlsx,
+    histOpen:matHistOpen, setHistOpen:setMatHistOpen,
+    viewMode:matViewMode, setViewMode:setMatViewMode,
+    catOpen:matCatOpen, setCatOpen:setMatCatOpen,
+    catCmpView:matCatCmpView, setCatCmpView:setMatCatCmpView,
+    kind:"materials", genId:genMatId, uploadFn:uploadMatXlsx, downloadFn:downloadMatXlsx,
     title:"원자재 관리", idPrefix:"MAT"
   });
 
@@ -2500,8 +2661,11 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
   const renderProcessing = () => renderItemList({
     items:processingCosts, setItems:setProcessingCosts, form:pcForm, setForm:setPcForm,
     editId:pcEdit, setEditId:setPcEdit, editForm:pcEditForm, setEditForm:setPcEditForm,
-    histOpen:pcHistOpen, setHistOpen:setPcHistOpen, kind:"processing",
-    genId:genPcId, uploadFn:uploadPcXlsx, downloadFn:downloadPcXlsx,
+    histOpen:pcHistOpen, setHistOpen:setPcHistOpen,
+    viewMode:pcViewMode, setViewMode:setPcViewMode,
+    catOpen:pcCatOpen, setCatOpen:setPcCatOpen,
+    catCmpView:pcCatCmpView, setCatCmpView:setPcCatCmpView,
+    kind:"processing", genId:genPcId, uploadFn:uploadPcXlsx, downloadFn:downloadPcXlsx,
     title:"가공비 관리", idPrefix:"PC"
   });
 
