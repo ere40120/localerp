@@ -3360,4 +3360,24 @@ function App({user, localMode}) {
     default: return <Dashboard vouchers={vouchers} accounts={accounts} statements={statements} taxInvoices={taxInvoices}/>;
   }};
 
-  r
+  return (
+    <div style={{display:"flex",minHeight:"100vh",background:"#f4f5f7",fontFamily:"'Noto Sans KR',-apple-system,sans-serif"}}>
+      <div className={"sidebar-overlay"+(sidebarOpen?" open":"")} onClick={()=>setSidebarOpen(false)}/>
+      <Sidebar activeMenu={menu} setActiveMenu={setMenu} menuOrder={menuOrder} setMenuOrder={setMenuOrder} hiddenMenus={hiddenMenus} setHiddenMenus={setHiddenMenus} onClose={()=>setSidebarOpen(false)} isOpen={sidebarOpen}/>
+      <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        <div className="topbar">
+          <button className="hamburger" onClick={()=>setSidebarOpen(true)}><Menu size={22}/></button>
+          <span style={{fontSize:16,fontWeight:700,flex:1}}>LocalERP</span>
+          <span style={{fontSize:11,opacity:0.7,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user&&user.email}</span>
+          <button onClick={()=>{if(typeof __auth!=='undefined'&&__auth)__auth.signOut();else location.reload();}} style={{background:'rgba(255,255,255,0.15)',border:'none',color:'#fff',borderRadius:6,padding:'4px 10px',fontSize:12,cursor:'pointer',marginLeft:6}}>로그아웃</button>
+        </div>
+        <div className="main-content" style={{flex:1,padding:"22px 26px",overflowX:"auto"}}>{page()}</div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<AuthRoot/>);
+</script>
+</body>
+</html>
