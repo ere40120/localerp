@@ -2331,6 +2331,11 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
   const [pcEdit, setPcEdit] = useState(null);
   const [pcEditForm, setPcEditForm] = useState({});
   const [pcHistOpen, setPcHistOpen] = useState(null);
+  const [matDragIdx, setMatDragIdx] = useState(null);
+  const [matDragOverIdx, setMatDragOverIdx] = useState(null);
+  const [pcDragIdx, setPcDragIdx] = useState(null);
+  const [pcDragOverIdx, setPcDragOverIdx] = useState(null);
+  const [catDragState, setCatDragState] = useState({c1:null,fromIdx:null,toIdx:null});
 
   // ---- 카테고리/회사 헬퍼 ----
   const getCatById = (id) => categories.find(c=>c.id===id)||{cat1:"",cat2:"",cat3:""};
@@ -2760,7 +2765,7 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
   // 원자재/가공비 공통 목록 렌더러
   const renderItemList = ({items, setItems, form, setForm, editId, setEditId, editForm, setEditForm,
     histOpen, setHistOpen, viewMode, setViewMode, catOpen, setCatOpen, catCmpView, setCatCmpView,
-    kind, genId, uploadFn, downloadFn, title, idPrefix}) => (
+    kind, genId, uploadFn, downloadFn, title, idPrefix, dragIdx, setDragIdx, dragOverIdx, setDragOverIdx}) => (
     <div>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,flexWrap:"wrap"}}>
         <h3 style={{fontSize:16,fontWeight:700,color:"#1a1a2e",flex:1}}>{title}</h3>
@@ -2830,8 +2835,14 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
       </div>
       {/* 목록 */}
       {items.length===0&&<div style={{...S.card,padding:20,textAlign:"center",color:"#aaa"}}>등록된 항목이 없습니다.</div>}
-      {items.map(item=>(
-        <div key={item.id} style={{...S.card,marginBottom:8,padding:0,overflow:"hidden"}}>
+      {items.map((item,idx)=>(
+        <div key={item.id}
+          draggable
+          onDragStart={e=>{e.dataTransfer.effectAllowed="move";setDragIdx(idx);}}
+          onDragOver={e=>{e.preventDefault();e.dataTransfer.dropEffect="move";if(dragOverIdx!==idx)setDragOverIdx(idx);}}
+          onDrop={e=>{e.preventDefault();if(dragIdx==null||dragIdx===idx){setDragIdx(null);setDragOverIdx(null);return;}const arr=[...items];const[m]=arr.splice(dragIdx,1);arr.splice(idx,0,m);setItems(arr);setDragIdx(null);setDragOverIdx(null);}}
+          onDragEnd={()=>{setDragIdx(null);setDragOverIdx(null);}}
+          style={{...S.card,marginBottom:8,padding:0,overflow:"hidden",opacity:dragIdx===idx?0.4:1,outline:dragOverIdx===idx&&dragIdx!==idx?"2px dashed #1a237e":"none",transition:"opacity 0.15s"}}>
           <div style={{padding:"10px 14px",background:"#f8f9ff"}}>
             {editId===item.id ? (
               <div>
@@ -2882,6 +2893,7 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
             ) : (
               <div>
                 <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <span style={{cursor:"grab",color:"#ccc",fontSize:18,userSelect:"none",lineHeight:1}} title="드래그로 순서 변경">⠿</span>
                   <span style={{fontSize:11,color:"#888",minWidth:60}}>{item.id}</span>
                   <span style={{fontWeight:700,flex:2,minWidth:100}}>{item.name}</span>
                   <span style={{color:"#888",fontSize:12}}>{item.unit}</span>
@@ -2917,7 +2929,8 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
     catOpen:matCatOpen, setCatOpen:setMatCatOpen,
     catCmpView:matCatCmpView, setCatCmpView:setMatCatCmpView,
     kind:"materials", genId:genMatId, uploadFn:uploadMatXlsx, downloadFn:downloadMatXlsx,
-    title:"원자재 관리", idPrefix:"MAT"
+    title:"원자재 관리", idPrefix:"MAT",
+    dragIdx:matDragIdx, setDragIdx:setMatDragIdx, dragOverIdx:matDragOverIdx, setDragOverIdx:setMatDragOverIdx
   });
 
   // 가공비 탭 렌더
@@ -2929,7 +2942,8 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
     catOpen:pcCatOpen, setCatOpen:setPcCatOpen,
     catCmpView:pcCatCmpView, setCatCmpView:setPcCatCmpView,
     kind:"processing", genId:genPcId, uploadFn:uploadPcXlsx, downloadFn:downloadPcXlsx,
-    title:"가공비 관리", idPrefix:"PC"
+    title:"가공비 관리", idPrefix:"PC",
+    dragIdx:pcDragIdx, setDragIdx:setPcDragIdx, dragOverIdx:pcDragOverIdx, setDragOverIdx:setPcDragOverIdx
   });
 
   // ---- 완제품 구성 행 공통 헬퍼 ----
@@ -3214,14 +3228,21 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
                   </div>
                   {c1open && (
                     <div style={{padding:"8px 14px"}}>
-                      {c1items.map(c=>(
-                        <div key={c.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid #f4f5f7"}}>
+                      {c1items.map((c,ci)=>(
+                        <div key={c.id}
+                          draggable
+                          onDragStart={e=>{e.dataTransfer.effectAllowed="move";setCatDragState({c1,fromIdx:ci,toIdx:ci});}}
+                          onDragOver={e=>{e.preventDefault();if(catDragState.c1===c1&&catDragState.toIdx!==ci)setCatDragState(p=>({...p,toIdx:ci}));}}
+                          onDrop={e=>{e.preventDefault();if(catDragState.c1!==c1||catDragState.fromIdx==null||catDragState.fromIdx===ci)return;const arr=[...categories];const ids=c1items.map(x=>x.id);const gi=arr.findIndex(x=>x.id===ids[catDragState.fromIdx]);const gj=arr.findIndex(x=>x.id===ids[ci]);if(gi===-1||gj===-1)return;const[mv]=arr.splice(gi,1);arr.splice(gj,0,mv);setCategories(arr);setCatDragState({c1:null,fromIdx:null,toIdx:null});}}
+                          onDragEnd={()=>setCatDragState({c1:null,fromIdx:null,toIdx:null})}
+                          style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid #f4f5f7",opacity:catDragState.c1===c1&&catDragState.fromIdx===ci?0.4:1,outline:catDragState.c1===c1&&catDragState.toIdx===ci&&catDragState.fromIdx!==ci?"2px dashed #1a237e":"none",transition:"opacity 0.15s"}}>
                           {catEditId===c.id ? (<>
                             <input style={{...S2.inp,flex:1,minWidth:80}} placeholder="2차" value={catEditForm.cat2||""} onChange={e=>setCatEditForm(p=>({...p,cat2:e.target.value}))}/>
                             <input style={{...S2.inp,flex:1,minWidth:80}} placeholder="3차(선택)" value={catEditForm.cat3||""} onChange={e=>setCatEditForm(p=>({...p,cat3:e.target.value}))}/>
                             <button style={S2.iconBtn("#2e7d32")} onClick={()=>{setCategories(p=>p.map(x=>x.id===c.id?{...x,cat2:catEditForm.cat2||"",cat3:catEditForm.cat3||""}:x));setCatEditId(null);}}>✔저장</button>
                             <button style={S2.iconBtn("#999")} onClick={()=>setCatEditId(null)}>✖</button>
                           </>) : (<>
+                            <span style={{cursor:"grab",color:"#ccc",fontSize:18,userSelect:"none",lineHeight:1}} title="드래그로 순서 변경">⠿</span>
                             <span style={{flex:1,fontSize:13}}>{c.cat2||"(없음)"}{c.cat3&&<span style={{color:"#6a1b9a",marginLeft:6}}>▶ {c.cat3}</span>}</span>
                             <span style={{fontSize:11,color:"#aaa"}}>{c.id}</span>
                             <button style={S2.iconBtn("#1565c0")} onClick={()=>{setCatEditId(c.id);setCatEditForm({cat2:c.cat2,cat3:c.cat3});}}>편집</button>
