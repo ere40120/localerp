@@ -864,7 +864,58 @@ const ProductMgmt = ({products,setProducts}) => {
   const [importData,setImportData]=useState([]);
   const [importError,setImportError]=useState("");
   const [importMode,setImportMode]=useState("append");
+  const [selected,setSelected]=useState(()=>new Set());
+  const [bulkModal,setBulkModal]=useState(false);
+  const [bulkField,setBulkField]=useState("basePrice");
+  const [bulkOp,setBulkOp]=useState("set");
+  const [bulkValue,setBulkValue]=useState("");
   const fileRef=useRef(null);
+
+  // 품목 목록 변경 시 존재하지 않는 ID는 선택 해제
+  useEffect(()=>{
+    setSelected(prev=>{
+      const ids=new Set(products.map(p=>p.id));
+      const next=new Set();let changed=false;
+      prev.forEach(id=>{if(ids.has(id))next.add(id);else changed=true;});
+      return changed?next:prev;
+    });
+  },[products]);
+
+  const allChecked = products.length>0 && products.every(p=>selected.has(p.id));
+  const someChecked = selected.size>0 && !allChecked;
+  const toggleAll=()=>{if(allChecked)setSelected(new Set());else setSelected(new Set(products.map(p=>p.id)));};
+  const toggleOne=(id)=>{setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});};
+  const deleteSelected=()=>{
+    if(selected.size===0)return;
+    if(!confirm(`선택한 ${selected.size}개 품목을 삭제하시겠습니까?`))return;
+    setProducts(prev=>prev.filter(x=>!selected.has(x.id)));
+    setSelected(new Set());
+  };
+  const openBulk=()=>{setBulkField("basePrice");setBulkOp("set");setBulkValue("");setBulkModal(true);};
+  const applyBulk=()=>{
+    const v=String(bulkValue).trim();
+    if(bulkField==="basePrice"){
+      const num=Number(v);
+      if(!isFinite(num)||v===""){alert("숫자를 입력해주세요.");return;}
+      setProducts(prev=>prev.map(p=>{
+        if(!selected.has(p.id))return p;
+        const cur=Number(p.basePrice)||0;
+        let next=cur;
+        if(bulkOp==="set")next=num;
+        else if(bulkOp==="addAmt")next=cur+num;
+        else if(bulkOp==="subAmt")next=cur-num;
+        else if(bulkOp==="addPct")next=cur*(1+num/100);
+        else if(bulkOp==="subPct")next=cur*(1-num/100);
+        return {...p,basePrice:Math.max(0,Math.round(next))};
+      }));
+    }else{
+      if(v===""&&!confirm("빈 값으로 일괄 변경하시겠습니까?"))return;
+      setProducts(prev=>prev.map(p=>selected.has(p.id)?{...p,[bulkField]:v}:p));
+    }
+    setBulkModal(false);
+    setBulkValue("");
+  };
+
   const submit=()=>{
     if(!form.name){alert("품목명을 입력하세요.");return;}
     const maxNum=Math.max(0,...products.map(p=>parseInt((p.code||p.id).replace(/\D/g,"")||"0")||0));
@@ -969,9 +1020,33 @@ const ProductMgmt = ({products,setProducts}) => {
       </div>
     </div>
     <div style={{...S.card,overflow:"auto"}}>
+      <div style={{padding:"8px 12px",fontSize:12,color:"#888",borderBottom:"1px solid #f0f0f0",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <div>
+          총 {products.length}개 품목
+          {selected.size>0 && <span style={{marginLeft:8,color:"#1565c0",fontWeight:600}}>({selected.size}개 선택됨)</span>}
+        </div>
+        {selected.size>0 && (
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <button onClick={openBulk} style={{...S.btn,background:"#1565c0",fontSize:11,padding:"5px 10px",display:"flex",alignItems:"center",gap:4}}>
+              <Edit3 size={12}/>선택 일괄 수정 ({selected.size})
+            </button>
+            <button onClick={deleteSelected} style={{...S.btn,background:"#d32f2f",fontSize:11,padding:"5px 10px",display:"flex",alignItems:"center",gap:4}}>
+              <Trash2 size={12}/>선택 삭제 ({selected.size})
+            </button>
+          </div>
+        )}
+      </div>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}>
-        <thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["품목코드","품목명","규격","단위","기본단가","분류","관리"].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead>
-        <tbody>{products.map(p=>(<tr key={p.id} style={{borderBottom:"1px solid #f0f0f0"}}>
+        <thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>
+          <th style={{...S.th,width:36,textAlign:"center"}}>
+            <input type="checkbox" checked={allChecked} ref={el=>{if(el)el.indeterminate=someChecked;}} onChange={toggleAll} title={allChecked?"전체 선택 해제":"전체 선택"} style={{cursor:"pointer"}}/>
+          </th>
+          {["품목코드","품목명","규격","단위","기본단가","분류","관리"].map((t,i)=><th key={i} style={S.th}>{t}</th>)}
+        </tr></thead>
+        <tbody>{products.map(p=>(<tr key={p.id} style={{borderBottom:"1px solid #f0f0f0",background:selected.has(p.id)?"#e3f2fd":"transparent"}}>
+          <td style={{padding:8,textAlign:"center"}}>
+            <input type="checkbox" checked={selected.has(p.id)} onChange={()=>toggleOne(p.id)} style={{cursor:"pointer"}}/>
+          </td>
           <td style={{padding:8,fontWeight:600,color:"#1a237e",fontFamily:"monospace"}}>{p.code||p.id}</td><td style={{padding:8,fontWeight:500}}>{p.name}</td>
           <td style={{padding:8}}>{p.spec}</td><td style={{padding:8,textAlign:"center"}}>{p.unit}</td>
           <td style={{padding:8,textAlign:"right",fontWeight:600,color:"#1565c0"}}>{fmt(p.basePrice)}</td>
@@ -1022,6 +1097,63 @@ const ProductMgmt = ({products,setProducts}) => {
             </div>
           </>)}
           {importData.length===0&&importError&&(<div style={{display:"flex",justifyContent:"flex-end",marginTop:12}}><button onClick={()=>{setImportModal(false);setImportError("");}} style={S.btnSec}>닫기</button></div>)}
+        </div>
+      </div>
+    )}
+    {bulkModal&&(
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"#fff",borderRadius:12,padding:24,width:480,maxWidth:"95vw",boxShadow:"0 8px 32px rgba(0,0,0,0.2)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+            <h3 style={{fontSize:16,fontWeight:700,color:"#1a1a2e"}}>선택 항목 일괄 수정</h3>
+            <button onClick={()=>setBulkModal(false)} style={{background:"none",border:"none",cursor:"pointer"}}><X size={18}/></button>
+          </div>
+          <div style={{background:"#e3f2fd",border:"1px solid #1565c0",borderRadius:6,padding:10,marginBottom:14,fontSize:12,color:"#0d47a1"}}>
+            선택된 <strong>{selected.size}개</strong> 품목에 일괄 적용됩니다.
+          </div>
+          <div style={{marginBottom:12}}>
+            <label style={S.label}>수정 항목</label>
+            <select value={bulkField} onChange={e=>{setBulkField(e.target.value);setBulkOp("set");setBulkValue("");}} style={S.select}>
+              <option value="basePrice">기본단가</option>
+              <option value="category">분류</option>
+              <option value="unit">단위</option>
+              <option value="spec">규격</option>
+            </select>
+          </div>
+          {bulkField==="basePrice"&&(
+            <div style={{marginBottom:12}}>
+              <label style={S.label}>변경 방식</label>
+              <select value={bulkOp} onChange={e=>setBulkOp(e.target.value)} style={S.select}>
+                <option value="set">지정 금액으로 설정</option>
+                <option value="addAmt">금액 더하기 (+)</option>
+                <option value="subAmt">금액 빼기 (-)</option>
+                <option value="addPct">비율 인상 (+%)</option>
+                <option value="subPct">비율 인하 (-%)</option>
+              </select>
+            </div>
+          )}
+          <div style={{marginBottom:18}}>
+            <label style={S.label}>{bulkField==="basePrice"?(bulkOp.endsWith("Pct")?"비율 (%)":"금액 (원)"):"새 값"}</label>
+            <input
+              type={bulkField==="basePrice"?"number":"text"}
+              value={bulkValue}
+              onChange={e=>setBulkValue(e.target.value)}
+              style={{...S.input,textAlign:bulkField==="basePrice"?"right":"left"}}
+              placeholder={bulkField==="basePrice"?(bulkOp==="set"?"예: 12000":bulkOp.endsWith("Pct")?"예: 10":"예: 1000"):"예: 서비스"}
+              autoFocus
+            />
+            {bulkField==="basePrice"&&bulkOp!=="set"&&(
+              <div style={{fontSize:11,color:"#888",marginTop:4}}>
+                {bulkOp==="addPct"&&"각 품목의 기본단가에 입력한 % 만큼 인상합니다. 결과는 정수(원)로 반올림됩니다."}
+                {bulkOp==="subPct"&&"각 품목의 기본단가에서 입력한 % 만큼 인하합니다. 결과는 정수(원)로 반올림됩니다."}
+                {bulkOp==="addAmt"&&"각 품목의 기본단가에 입력한 금액을 더합니다."}
+                {bulkOp==="subAmt"&&"각 품목의 기본단가에서 입력한 금액을 뺍니다. (음수가 되면 0)"}
+              </div>
+            )}
+          </div>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <button onClick={()=>setBulkModal(false)} style={S.btnSec}>취소</button>
+            <button onClick={applyBulk} style={{...S.btn,background:"#2e7d32",display:"flex",alignItems:"center",gap:5}}><Check size={14}/>적용</button>
+          </div>
         </div>
       </div>
     )}
