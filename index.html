@@ -1688,7 +1688,39 @@ const Partners = ({partners,setPartners}) => {
   const [importData,setImportData]=useState([]);
   const [importError,setImportError]=useState("");
   const [importMode,setImportMode]=useState("append");
+  const [selected,setSelected]=useState(()=>new Set());
   const fileRef=useRef(null);
+
+  // 거래처 목록이 바뀌면 존재하지 않는 ID는 선택 해제
+  useEffect(()=>{
+    setSelected(prev=>{
+      const ids=new Set(partners.map(p=>p.id));
+      const next=new Set();
+      let changed=false;
+      prev.forEach(id=>{if(ids.has(id))next.add(id);else changed=true;});
+      return changed?next:prev;
+    });
+  },[partners]);
+
+  const allChecked = partners.length>0 && partners.every(p=>selected.has(p.id));
+  const someChecked = selected.size>0 && !allChecked;
+  const toggleAll=()=>{
+    if(allChecked){setSelected(new Set());}
+    else{setSelected(new Set(partners.map(p=>p.id)));}
+  };
+  const toggleOne=(id)=>{
+    setSelected(prev=>{
+      const s=new Set(prev);
+      if(s.has(id))s.delete(id);else s.add(id);
+      return s;
+    });
+  };
+  const deleteSelected=()=>{
+    if(selected.size===0)return;
+    if(!confirm(`선택한 ${selected.size}개 거래처를 삭제하시겠습니까?`))return;
+    setPartners(prev=>prev.filter(x=>!selected.has(x.id)));
+    setSelected(new Set());
+  };
 
   const submit=()=>{
     if(!form.name){alert("거래처명을 입력하세요.");return;}
@@ -1817,12 +1849,30 @@ const Partners = ({partners,setPartners}) => {
 
     {/* 거래처 목록 테이블 */}
     <div style={{...S.card,overflow:"auto"}}>
-      <div style={{padding:"8px 12px",fontSize:12,color:"#888",borderBottom:"1px solid #f0f0f0"}}>
-        총 {partners.length}개 거래처
+      <div style={{padding:"8px 12px",fontSize:12,color:"#888",borderBottom:"1px solid #f0f0f0",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <div>
+          총 {partners.length}개 거래처
+          {selected.size>0 && <span style={{marginLeft:8,color:"#1565c0",fontWeight:600}}>({selected.size}개 선택됨)</span>}
+        </div>
+        {selected.size>0 && (
+          <button onClick={deleteSelected} style={{...S.btn,background:"#d32f2f",fontSize:11,padding:"5px 10px",display:"flex",alignItems:"center",gap:4}}>
+            <Trash2 size={12}/>선택 삭제 ({selected.size})
+          </button>
+        )}
       </div>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
         <thead>
           <tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>
+            <th style={{...S.th,width:36,textAlign:"center"}}>
+              <input
+                type="checkbox"
+                checked={allChecked}
+                ref={el=>{if(el)el.indeterminate=someChecked;}}
+                onChange={toggleAll}
+                title={allChecked?"전체 선택 해제":"전체 선택"}
+                style={{cursor:"pointer"}}
+              />
+            </th>
             {["코드","거래처명","사업자번호","대표자","주소","전화","팩스","이메일","업태","종목","주민/법인번호","담당자","담당자전화","유형",""].map((t,i)=>(
               <th key={i} style={S.th}>{t}</th>
             ))}
@@ -1830,7 +1880,15 @@ const Partners = ({partners,setPartners}) => {
         </thead>
         <tbody>
           {partners.map(p=>(
-            <tr key={p.id} style={{borderBottom:"1px solid #f0f0f0"}}>
+            <tr key={p.id} style={{borderBottom:"1px solid #f0f0f0",background:selected.has(p.id)?"#e3f2fd":"transparent"}}>
+              <td style={{padding:8,textAlign:"center"}}>
+                <input
+                  type="checkbox"
+                  checked={selected.has(p.id)}
+                  onChange={()=>toggleOne(p.id)}
+                  style={{cursor:"pointer"}}
+                />
+              </td>
               <td style={{padding:8,color:"#888",whiteSpace:"nowrap"}}>{p.id}</td>
               <td style={{padding:8,fontWeight:500,whiteSpace:"nowrap"}}>{p.name}</td>
               <td style={{padding:8,whiteSpace:"nowrap"}}>{p.bizNo}</td>
