@@ -309,34 +309,85 @@ function useChunkedPersist(key, dateField, init) {
   return [val, set, loadYear, loadedYears];
 }
 
-// 과거 데이터 불러오기 공통 배너 컴포넌트
-function HistoryLoadBar({loadedYears, loadYear, label}) {
+// 데이터 로드 범위 선택 배너 — 기간 프리셋 또는 직접 지정으로 필요한 연도 청크를 자동 로드
+function DataRangeBar({loadedYears, loadYear}) {
   const curYear = new Date().getFullYear();
-  const [selYear, setSelYear] = useState(curYear - 1);
+  const todayStr = new Date().toISOString().slice(0,10);
+  const PRESETS = [
+    {v:'1month',  l:'최근 1달'},
+    {v:'3months', l:'최근 3달'},
+    {v:'6months', l:'최근 6달'},
+    {v:'thisyear',l:'올해'},
+    {v:'lastyear',l:'작년+올해'},
+    {v:'all',     l:'전체'},
+    {v:'custom',  l:'직접 지정'},
+  ];
+  const [preset, setPreset] = useState('1month');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState(todayStr);
   const [loading, setLoading] = useState(false);
-  const years = Array.from({length: curYear - 2015}, (_, i) => curYear - 1 - i);
+  const loaded = (loadedYears||[]).map(Number).sort((a,b)=>b-a);
 
-  const handleLoad = async () => {
-    if (loadedYears.includes(Number(selYear))) return;
+  function calcDateRange(p) {
+    const today = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    switch(p) {
+      case '1month':  { const d=new Date(today); d.setMonth(d.getMonth()-1);  return [fmt(d), todayStr]; }
+      case '3months': { const d=new Date(today); d.setMonth(d.getMonth()-3);  return [fmt(d), todayStr]; }
+      case '6months': { const d=new Date(today); d.setMonth(d.getMonth()-6);  return [fmt(d), todayStr]; }
+      case 'thisyear':  return [`${curYear}-01-01`, todayStr];
+      case 'lastyear':  return [`${curYear-1}-01-01`, todayStr];
+      case 'all':       return ['2016-01-01', todayStr];
+      case 'custom':    return [customFrom||'2016-01-01', customTo||todayStr];
+      default:          return [null, null];
+    }
+  }
+
+  function getNeededYears(from, to) {
+    const y1 = parseInt((from||'2016').slice(0,4));
+    const y2 = parseInt((to||todayStr).slice(0,4));
+    const ys = [];
+    for (let y = Math.max(y1,2016); y <= Math.min(y2, curYear); y++) ys.push(y);
+    return ys;
+  }
+
+  function handleApply() {
+    const [from, to] = calcDateRange(preset);
+    if (!from) return;
+    const needed = getNeededYears(from, to);
+    const toLoad = needed.filter(y => !loaded.includes(y));
+    if (toLoad.length === 0) return;
     setLoading(true);
-    loadYear(Number(selYear));
-    setTimeout(() => setLoading(false), 1500);
-  };
+    toLoad.forEach(y => loadYear(y));
+    setTimeout(() => setLoading(false), 1800);
+  }
 
-  const loaded = loadedYears.map(Number).sort((a,b)=>b-a);
+  const [from, to] = calcDateRange(preset);
+  const needed = from ? getNeededYears(from, to) : [];
+  const alreadyLoaded = needed.every(y => loaded.includes(y));
 
   return (
     <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",background:"#f0f4ff",border:"1px solid #c5cae9",borderRadius:8,marginBottom:12,flexWrap:"wrap",fontSize:12.5}}>
       <Clock size={13} color="#3949ab"/>
-      <span style={{color:"#3949ab",fontWeight:600}}>로드된 기간:</span>
+      <span style={{color:"#3949ab",fontWeight:600,whiteSpace:"nowrap"}}>로드된 데이터:</span>
       <span style={{color:"#555"}}>{loaded.length ? loaded.map(y=>y+'년').join(', ') : '—'}</span>
-      <span style={{color:"#aaa",margin:"0 4px"}}>|</span>
-      <span style={{color:"#555"}}>과거 데이터 불러오기:</span>
-      <select value={selYear} onChange={e=>setSelYear(Number(e.target.value))} style={{padding:"4px 8px",border:"1px solid #c5cae9",borderRadius:6,fontSize:12,background:"#fff",cursor:"pointer"}}>
-        {years.map(y=><option key={y} value={y} disabled={loadedYears.includes(y)}>{y}년{loadedYears.includes(y)?' (로드됨)':''}</option>)}
+      <span style={{color:"#ccc",margin:"0 2px"}}>|</span>
+      <span style={{color:"#666",whiteSpace:"nowrap"}}>추가 로드:</span>
+      <select value={preset} onChange={e=>{setPreset(e.target.value);}} style={{padding:"4px 8px",border:"1px solid #c5cae9",borderRadius:6,fontSize:12,background:"#fff",cursor:"pointer"}}>
+        {PRESETS.map(p=><option key={p.v} value={p.v}>{p.l}</option>)}
       </select>
-      <button onClick={handleLoad} disabled={loading||loadedYears.includes(Number(selYear))} style={{padding:"4px 12px",background:loadedYears.includes(Number(selYear))?"#e0e0e0":"#3949ab",color:loadedYears.includes(Number(selYear))?"#999":"#fff",border:"none",borderRadius:6,cursor:loadedYears.includes(Number(selYear))?"not-allowed":"pointer",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
-        {loading ? <><RotateCcw size={11} style={{animation:"spin 1s linear infinite"}}/> 로딩...</> : <><Download size={11}/> 불러오기</>}
+      {preset==='custom' && <>
+        <input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)} style={{padding:"4px 7px",border:"1px solid #c5cae9",borderRadius:6,fontSize:12}}/>
+        <span style={{color:"#888"}}>~</span>
+        <input type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)} style={{padding:"4px 7px",border:"1px solid #c5cae9",borderRadius:6,fontSize:12}}/>
+      </>}
+      <button onClick={handleApply} disabled={loading||alreadyLoaded} style={{padding:"4px 12px",background:(loading||alreadyLoaded)?"#e0e0e0":"#3949ab",color:(loading||alreadyLoaded)?"#999":"#fff",border:"none",borderRadius:6,cursor:(loading||alreadyLoaded)?"default":"pointer",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}>
+        {loading
+          ? <><RotateCcw size={11} style={{animation:"spin 1s linear infinite"}}/> 로딩 중...</>
+          : alreadyLoaded
+            ? <><CheckCircle size={11}/> 완료</>
+            : <><Download size={11}/> 불러오기</>}
       </button>
     </div>
   );
@@ -1516,7 +1567,7 @@ const StatementPage = ({statements,setStatements,partners,myBiz,products,partner
   );
   return (
     <div>
-      {_useFirebase && loadYear && <HistoryLoadBar loadedYears={loadedYears||[]} loadYear={loadYear} label="거래명세서"/>}
+      {_useFirebase && loadYear && <DataRangeBar loadedYears={loadedYears||[]} loadYear={loadYear}/>}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
         <h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e"}}>거래명세서</h2>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -1674,7 +1725,7 @@ const TaxInvoicePage = ({taxInvoices,setTaxInvoices,partners,myBiz,products,part
   );
   return (
     <div>
-      {_useFirebase && loadYear && <HistoryLoadBar loadedYears={loadedYears||[]} loadYear={loadYear} label="세금계산서"/>}
+      {_useFirebase && loadYear && <DataRangeBar loadedYears={loadedYears||[]} loadYear={loadYear}/>}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e"}}>세금계산서</h2>
         <button onClick={()=>setMode("form")} style={S.btn}><Plus size={14}/> 새 세금계산서</button>
@@ -1876,7 +1927,7 @@ const VoucherEntry = ({vouchers,setVouchers,accounts,partners,loadYear,loadedYea
   const empty={date:today,type:"출금",description:"",debitAccount:"",creditAccount:"",debitAmount:"",partner:"",memo:""};
   const [form,setForm]=useState(empty);const [editId,setEditId]=useState(null);
   const submit=()=>{if(!form.debitAccount||!form.creditAccount||!form.debitAmount){alert("필수항목을 입력하세요.");return;}const amt=Number(form.debitAmount);if(editId){setVouchers(p=>p.map(v=>v.id===editId?{...v,...form,debitAmount:amt,creditAmount:amt}:v));setEditId(null);}else{setVouchers(p=>[...p,{...form,id:Math.max(0,...p.map(v=>v.id))+1,debitAmount:amt,creditAmount:amt}]);}setForm(empty);};
-  return(<div>{_useFirebase && loadYear && <HistoryLoadBar loadedYears={loadedYears||[]} loadYear={loadYear} label="전표"/>}<h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>전표입력</h2>
+  return(<div>{_useFirebase && loadYear && <DataRangeBar loadedYears={loadedYears||[]} loadYear={loadYear}/>}<h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>전표입력</h2>
     <div style={{...S.card,padding:16,marginBottom:12}}>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
         <div style={{flex:"0 0 120px"}}><label style={S.label}>일자</label><input type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})} style={S.input}/></div>
@@ -1901,31 +1952,31 @@ const VoucherEntry = ({vouchers,setVouchers,accounts,partners,loadYear,loadedYea
 
 const Journal = ({vouchers,accounts,loadYear,loadedYears}) => {
   const sorted=[...vouchers].sort((a,b)=>a.date.localeCompare(b.date));let tD=0,tC=0;sorted.forEach(v=>{tD+=v.debitAmount;tC+=v.creditAmount;});
-  return(<div>{_useFirebase && loadYear && <HistoryLoadBar loadedYears={loadedYears||[]} loadYear={loadYear} label="전표"/>}<h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>분개장</h2><div style={{...S.card,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["일자","적요","차변 계정","차변","대변 계정","대변"].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead><tbody>{sorted.map(v=>{const da=accounts.find(a=>a.code===v.debitAccount);const ca=accounts.find(a=>a.code===v.creditAccount);return(<tr key={v.id} style={{borderBottom:"1px solid #f0f0f0"}}><td style={{padding:8}}>{v.date}</td><td style={{padding:8,fontWeight:500}}>{v.description}</td><td style={{padding:8,color:"#1565c0"}}>{da?`[${da.code}] ${da.name}`:""}</td><td style={{padding:8,textAlign:"right",fontWeight:600}}>{fmt(v.debitAmount)}</td><td style={{padding:8,color:"#c62828"}}>{ca?`[${ca.code}] ${ca.name}`:""}</td><td style={{padding:8,textAlign:"right",fontWeight:600}}>{fmt(v.creditAmount)}</td></tr>);})}</tbody><tfoot><tr style={{background:"#f0f4ff",borderTop:"2px solid #c5cae9",fontWeight:700}}><td colSpan={3} style={{padding:10,textAlign:"right"}}>합계</td><td style={{padding:10,textAlign:"right",color:"#1565c0"}}>{fmt(tD)}</td><td/><td style={{padding:10,textAlign:"right",color:"#c62828"}}>{fmt(tC)}</td></tr></tfoot></table></div></div>);
+  return(<div>{_useFirebase && loadYear && <DataRangeBar loadedYears={loadedYears||[]} loadYear={loadYear}/>}<h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>분개장</h2><div style={{...S.card,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["일자","적요","차변 계정","차변","대변 계정","대변"].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead><tbody>{sorted.map(v=>{const da=accounts.find(a=>a.code===v.debitAccount);const ca=accounts.find(a=>a.code===v.creditAccount);return(<tr key={v.id} style={{borderBottom:"1px solid #f0f0f0"}}><td style={{padding:8}}>{v.date}</td><td style={{padding:8,fontWeight:500}}>{v.description}</td><td style={{padding:8,color:"#1565c0"}}>{da?`[${da.code}] ${da.name}`:""}</td><td style={{padding:8,textAlign:"right",fontWeight:600}}>{fmt(v.debitAmount)}</td><td style={{padding:8,color:"#c62828"}}>{ca?`[${ca.code}] ${ca.name}`:""}</td><td style={{padding:8,textAlign:"right",fontWeight:600}}>{fmt(v.creditAmount)}</td></tr>);})}</tbody><tfoot><tr style={{background:"#f0f4ff",borderTop:"2px solid #c5cae9",fontWeight:700}}><td colSpan={3} style={{padding:10,textAlign:"right"}}>합계</td><td style={{padding:10,textAlign:"right",color:"#1565c0"}}>{fmt(tD)}</td><td/><td style={{padding:10,textAlign:"right",color:"#c62828"}}>{fmt(tC)}</td></tr></tfoot></table></div></div>);
 };
 
 const Ledger = ({vouchers,accounts,loadYear,loadedYears}) => {
   const [sel,setSel]=useState("");const used=new Set();vouchers.forEach(v=>{used.add(v.debitAccount);used.add(v.creditAccount);});const active=accounts.filter(a=>used.has(a.code));const info=accounts.find(a=>a.code===sel);
   const txns=sel?vouchers.filter(v=>v.debitAccount===sel||v.creditAccount===sel).sort((a,b)=>a.date.localeCompare(b.date)):[];let bal=0;
   const rows=txns.map(v=>{const d=v.debitAccount===sel?v.debitAmount:0,cr=v.creditAccount===sel?v.creditAmount:0;bal+=info?.type==="debit"?d-cr:cr-d;const cc=v.debitAccount===sel?v.creditAccount:v.debitAccount;return{...v,d,cr,bal,cn:accounts.find(a=>a.code===cc)?.name||cc};});
-  return(<div>{_useFirebase && loadYear && <HistoryLoadBar loadedYears={loadedYears||[]} loadYear={loadYear} label="전표"/>}<h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>총계정원장</h2><select value={sel} onChange={e=>setSel(e.target.value)} style={{...S.select,width:"100%",maxWidth:280,marginBottom:14}}><option value="">계정과목 선택...</option>{active.map(a=><option key={a.code} value={a.code}>[{a.code}] {a.name}</option>)}</select>{sel&&info?<div style={{...S.card,overflow:"auto"}}><div style={{padding:"10px 14px",background:"#f0f4ff",fontWeight:700,color:"#1a237e"}}>[{info.code}] {info.name}</div><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["일자","적요","상대계정","차변","대변","잔액"].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead><tbody>{rows.map(r=><tr key={r.id} style={{borderBottom:"1px solid #f0f0f0"}}><td style={{padding:8}}>{r.date}</td><td style={{padding:8,fontWeight:500}}>{r.description}</td><td style={{padding:8,color:"#666"}}>{r.cn}</td><td style={{padding:8,textAlign:"right",color:r.d?"#1565c0":"#ccc"}}>{r.d?fmt(r.d):"-"}</td><td style={{padding:8,textAlign:"right",color:r.cr?"#c62828":"#ccc"}}>{r.cr?fmt(r.cr):"-"}</td><td style={{padding:8,textAlign:"right",fontWeight:700}}>{fmt(r.bal)}</td></tr>)}</tbody></table></div>:<div style={{...S.card,padding:50,textAlign:"center",color:"#999"}}>계정과목을 선택하세요.</div>}</div>);
+  return(<div>{_useFirebase && loadYear && <DataRangeBar loadedYears={loadedYears||[]} loadYear={loadYear}/>}<h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>총계정원장</h2><select value={sel} onChange={e=>setSel(e.target.value)} style={{...S.select,width:"100%",maxWidth:280,marginBottom:14}}><option value="">계정과목 선택...</option>{active.map(a=><option key={a.code} value={a.code}>[{a.code}] {a.name}</option>)}</select>{sel&&info?<div style={{...S.card,overflow:"auto"}}><div style={{padding:"10px 14px",background:"#f0f4ff",fontWeight:700,color:"#1a237e"}}>[{info.code}] {info.name}</div><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["일자","적요","상대계정","차변","대변","잔액"].map((t,i)=><th key={i} style={S.th}>{t}</th>)}</tr></thead><tbody>{rows.map(r=><tr key={r.id} style={{borderBottom:"1px solid #f0f0f0"}}><td style={{padding:8}}>{r.date}</td><td style={{padding:8,fontWeight:500}}>{r.description}</td><td style={{padding:8,color:"#666"}}>{r.cn}</td><td style={{padding:8,textAlign:"right",color:r.d?"#1565c0":"#ccc"}}>{r.d?fmt(r.d):"-"}</td><td style={{padding:8,textAlign:"right",color:r.cr?"#c62828":"#ccc"}}>{r.cr?fmt(r.cr):"-"}</td><td style={{padding:8,textAlign:"right",fontWeight:700}}>{fmt(r.bal)}</td></tr>)}</tbody></table></div>:<div style={{...S.card,padding:50,textAlign:"center",color:"#999"}}>계정과목을 선택하세요.</div>}</div>);
 };
 
 const TrialBalance = ({vouchers,accounts,loadYear,loadedYears}) => {
   const data=useMemo(()=>{const b={};vouchers.forEach(v=>{if(!b[v.debitAccount])b[v.debitAccount]={d:0,c:0};if(!b[v.creditAccount])b[v.creditAccount]={d:0,c:0};b[v.debitAccount].d+=v.debitAmount;b[v.creditAccount].c+=v.creditAmount;});const rows=[];let tD=0,tC=0,tDB=0,tCB=0;accounts.forEach(a=>{const x=b[a.code];if(!x)return;const net=x.d-x.c;const db=net>0?net:0,cb=net<0?-net:0;tD+=x.d;tC+=x.c;tDB+=db;tCB+=cb;rows.push({...a,td:x.d,tc:x.c,db,cb});});return{rows,tD,tC,tDB,tCB};},[vouchers,accounts]);
-  return(<div>{_useFirebase && loadYear && <HistoryLoadBar loadedYears={loadedYears||[]} loadYear={loadYear} label="전표"/>}<h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>합계잔액시산표</h2><div style={{...S.card,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["코드","계정과목","분류","합계차변","합계대변","잔액차변","잔액대변"].map((t,i)=><th key={i} style={{...S.th,textAlign:i>2?"right":"left"}}>{t}</th>)}</tr></thead><tbody>{data.rows.map(r=><tr key={r.code} style={{borderBottom:"1px solid #f0f0f0"}}><td style={{padding:8,color:"#888"}}>{r.code}</td><td style={{padding:8,fontWeight:500}}>{r.name}</td><td style={{padding:8,fontSize:11,color:"#888"}}>{r.category}</td><td style={{padding:8,textAlign:"right"}}>{r.td?fmt(r.td):"-"}</td><td style={{padding:8,textAlign:"right"}}>{r.tc?fmt(r.tc):"-"}</td><td style={{padding:8,textAlign:"right",fontWeight:600,color:"#1565c0"}}>{r.db?fmt(r.db):"-"}</td><td style={{padding:8,textAlign:"right",fontWeight:600,color:"#c62828"}}>{r.cb?fmt(r.cb):"-"}</td></tr>)}</tbody><tfoot><tr style={{background:"#f0f4ff",borderTop:"2px solid #c5cae9",fontWeight:700}}><td colSpan={3} style={{padding:10,textAlign:"right"}}>합계</td><td style={{padding:10,textAlign:"right"}}>{fmt(data.tD)}</td><td style={{padding:10,textAlign:"right"}}>{fmt(data.tC)}</td><td style={{padding:10,textAlign:"right",color:"#1565c0"}}>{fmt(data.tDB)}</td><td style={{padding:10,textAlign:"right",color:"#c62828"}}>{fmt(data.tCB)}</td></tr></tfoot></table></div></div>);
+  return(<div>{_useFirebase && loadYear && <DataRangeBar loadedYears={loadedYears||[]} loadYear={loadYear}/>}<h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>합계잔액시산표</h2><div style={{...S.card,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr style={{background:"#f8f9fa",borderBottom:"2px solid #e8eaed"}}>{["코드","계정과목","분류","합계차변","합계대변","잔액차변","잔액대변"].map((t,i)=><th key={i} style={{...S.th,textAlign:i>2?"right":"left"}}>{t}</th>)}</tr></thead><tbody>{data.rows.map(r=><tr key={r.code} style={{borderBottom:"1px solid #f0f0f0"}}><td style={{padding:8,color:"#888"}}>{r.code}</td><td style={{padding:8,fontWeight:500}}>{r.name}</td><td style={{padding:8,fontSize:11,color:"#888"}}>{r.category}</td><td style={{padding:8,textAlign:"right"}}>{r.td?fmt(r.td):"-"}</td><td style={{padding:8,textAlign:"right"}}>{r.tc?fmt(r.tc):"-"}</td><td style={{padding:8,textAlign:"right",fontWeight:600,color:"#1565c0"}}>{r.db?fmt(r.db):"-"}</td><td style={{padding:8,textAlign:"right",fontWeight:600,color:"#c62828"}}>{r.cb?fmt(r.cb):"-"}</td></tr>)}</tbody><tfoot><tr style={{background:"#f0f4ff",borderTop:"2px solid #c5cae9",fontWeight:700}}><td colSpan={3} style={{padding:10,textAlign:"right"}}>합계</td><td style={{padding:10,textAlign:"right"}}>{fmt(data.tD)}</td><td style={{padding:10,textAlign:"right"}}>{fmt(data.tC)}</td><td style={{padding:10,textAlign:"right",color:"#1565c0"}}>{fmt(data.tDB)}</td><td style={{padding:10,textAlign:"right",color:"#c62828"}}>{fmt(data.tCB)}</td></tr></tfoot></table></div></div>);
 };
 
 const BalanceSheet = ({vouchers,accounts,loadYear,loadedYears}) => {
   const data=useMemo(()=>{const b={};vouchers.forEach(v=>{if(!b[v.debitAccount])b[v.debitAccount]=0;if(!b[v.creditAccount])b[v.creditAccount]=0;b[v.debitAccount]+=v.debitAmount;b[v.creditAccount]-=v.creditAmount;});let ni=0;accounts.forEach(a=>{const bal=b[a.code]||0;if(a.category==="수익")ni+=Math.abs(bal);if(a.category==="비용")ni-=Math.abs(bal);});const secs={유동자산:[],비유동자산:[],유동부채:[],비유동부채:[],자본금:[],이익잉여금:[]};const tots={유동자산:0,비유동자산:0,유동부채:0,비유동부채:0,자본금:0,이익잉여금:0};accounts.forEach(a=>{const bal=b[a.code]||0;if(!secs[a.subcategory])return;const d=a.category==="자산"?bal:-bal;if(!d)return;secs[a.subcategory].push({...a,balance:d});tots[a.subcategory]+=d;});const tA=tots.유동자산+tots.비유동자산,tL=tots.유동부채+tots.비유동부채,tC=tots.자본금+tots.이익잉여금+ni;return{secs,tots,tA,tL,tC,ni};},[vouchers,accounts]);
   const Sec=({label,items,total})=>(<><tr style={{background:"#f8f9fa"}}><td colSpan={2} style={{padding:"7px 12px",fontWeight:700,color:"#1a237e",fontSize:13}}>{label}</td></tr>{items.map(it=><tr key={it.code} style={{borderBottom:"1px solid #f5f5f5"}}><td style={{padding:"5px 12px 5px 24px",fontSize:12.5}}>{it.name}</td><td style={{padding:"5px 12px",textAlign:"right"}}>{fmt(it.balance)}</td></tr>)}<tr style={{borderBottom:"2px solid #e0e0e0"}}><td style={{padding:"6px 12px",fontWeight:600}}>{label} 소계</td><td style={{padding:"6px 12px",textAlign:"right",fontWeight:700}}>{fmt(total)}</td></tr></>);
-  return(<div>{_useFirebase && loadYear && <HistoryLoadBar loadedYears={loadedYears||[]} loadYear={loadYear} label="전표"/>}<h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>재무상태표</h2><div style={{display:"flex",gap:12,flexWrap:"wrap"}}><div style={{...S.card,flex:1,minWidth:280,overflow:"hidden"}}><div style={{background:"#1a237e",color:"#fff",padding:"10px 14px",fontWeight:700}}>자산</div><table style={{width:"100%",borderCollapse:"collapse"}}><tbody><Sec label="유동자산" items={data.secs.유동자산} total={data.tots.유동자산}/><Sec label="비유동자산" items={data.secs.비유동자산} total={data.tots.비유동자산}/></tbody><tfoot><tr style={{background:"#e8eaf6",borderTop:"3px solid #1a237e"}}><td style={{padding:"10px 14px",fontWeight:800,color:"#1a237e"}}>자산 총계</td><td style={{padding:"10px 14px",textAlign:"right",fontWeight:800,fontSize:14,color:"#1a237e"}}>{fmt(data.tA)}</td></tr></tfoot></table></div><div style={{...S.card,flex:1,minWidth:280,overflow:"hidden"}}><div style={{background:"#b71c1c",color:"#fff",padding:"10px 14px",fontWeight:700}}>부채 및 자본</div><table style={{width:"100%",borderCollapse:"collapse"}}><tbody><Sec label="유동부채" items={data.secs.유동부채} total={data.tots.유동부채}/><Sec label="자본금" items={data.secs.자본금} total={data.tots.자본금}/><Sec label="이익잉여금" items={[...data.secs.이익잉여금,{code:"NI",name:"당기순이익",balance:data.ni}]} total={data.tots.이익잉여금+data.ni}/></tbody><tfoot><tr style={{background:"#e8eaf6",borderTop:"3px solid #1a237e"}}><td style={{padding:"10px 14px",fontWeight:800,color:"#1a237e"}}>부채+자본</td><td style={{padding:"10px 14px",textAlign:"right",fontWeight:800,fontSize:14,color:"#1a237e"}}>{fmt(data.tL+data.tC)}</td></tr></tfoot></table></div></div><div style={{marginTop:12,padding:"10px 18px",borderRadius:8,textAlign:"center",fontSize:13,fontWeight:600,background:Math.abs(data.tA-(data.tL+data.tC))<1?"#e8f5e9":"#fce4ec",color:Math.abs(data.tA-(data.tL+data.tC))<1?"#2e7d32":"#c62828"}}>자산({fmtW(data.tA)}) = 부채({fmtW(data.tL)}) + 자본({fmtW(data.tC)}) {Math.abs(data.tA-(data.tL+data.tC))<1?" ✓":" ✗"}</div></div>);
+  return(<div>{_useFirebase && loadYear && <DataRangeBar loadedYears={loadedYears||[]} loadYear={loadYear}/>}<h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>재무상태표</h2><div style={{display:"flex",gap:12,flexWrap:"wrap"}}><div style={{...S.card,flex:1,minWidth:280,overflow:"hidden"}}><div style={{background:"#1a237e",color:"#fff",padding:"10px 14px",fontWeight:700}}>자산</div><table style={{width:"100%",borderCollapse:"collapse"}}><tbody><Sec label="유동자산" items={data.secs.유동자산} total={data.tots.유동자산}/><Sec label="비유동자산" items={data.secs.비유동자산} total={data.tots.비유동자산}/></tbody><tfoot><tr style={{background:"#e8eaf6",borderTop:"3px solid #1a237e"}}><td style={{padding:"10px 14px",fontWeight:800,color:"#1a237e"}}>자산 총계</td><td style={{padding:"10px 14px",textAlign:"right",fontWeight:800,fontSize:14,color:"#1a237e"}}>{fmt(data.tA)}</td></tr></tfoot></table></div><div style={{...S.card,flex:1,minWidth:280,overflow:"hidden"}}><div style={{background:"#b71c1c",color:"#fff",padding:"10px 14px",fontWeight:700}}>부채 및 자본</div><table style={{width:"100%",borderCollapse:"collapse"}}><tbody><Sec label="유동부채" items={data.secs.유동부채} total={data.tots.유동부채}/><Sec label="자본금" items={data.secs.자본금} total={data.tots.자본금}/><Sec label="이익잉여금" items={[...data.secs.이익잉여금,{code:"NI",name:"당기순이익",balance:data.ni}]} total={data.tots.이익잉여금+data.ni}/></tbody><tfoot><tr style={{background:"#e8eaf6",borderTop:"3px solid #1a237e"}}><td style={{padding:"10px 14px",fontWeight:800,color:"#1a237e"}}>부채+자본</td><td style={{padding:"10px 14px",textAlign:"right",fontWeight:800,fontSize:14,color:"#1a237e"}}>{fmt(data.tL+data.tC)}</td></tr></tfoot></table></div></div><div style={{marginTop:12,padding:"10px 18px",borderRadius:8,textAlign:"center",fontSize:13,fontWeight:600,background:Math.abs(data.tA-(data.tL+data.tC))<1?"#e8f5e9":"#fce4ec",color:Math.abs(data.tA-(data.tL+data.tC))<1?"#2e7d32":"#c62828"}}>자산({fmtW(data.tA)}) = 부채({fmtW(data.tL)}) + 자본({fmtW(data.tC)}) {Math.abs(data.tA-(data.tL+data.tC))<1?" ✓":" ✗"}</div></div>);
 };
 
 const IncomeStatement = ({vouchers,accounts,loadYear,loadedYears}) => {
   const data=useMemo(()=>{const b={};vouchers.forEach(v=>{if(!b[v.debitAccount])b[v.debitAccount]=0;if(!b[v.creditAccount])b[v.creditAccount]=0;b[v.debitAccount]+=v.debitAmount;b[v.creditAccount]-=v.creditAmount;});const secs={매출:[],매출원가:[],판매비와관리비:[],영업외수익:[],영업외비용:[],법인세:[]};const tots={매출:0,매출원가:0,판매비와관리비:0,영업외수익:0,영업외비용:0,법인세:0};accounts.forEach(a=>{const bal=b[a.code]||0;if(!bal||!secs[a.subcategory])return;const d=Math.abs(bal);secs[a.subcategory].push({...a,balance:d});tots[a.subcategory]+=d;});const gp=tots.매출-tots.매출원가,oi=gp-tots.판매비와관리비,ni=oi+tots.영업외수익-tots.영업외비용-tots.법인세;return{secs,tots,gp,oi,ni};},[vouchers,accounts]);
   const R=({label,amount,bold,color,bg})=>(<tr style={{background:bg||"transparent",borderBottom:"1px solid #f0f0f0"}}><td style={{padding:bold?"10px 12px":"6px 12px 6px 24px",fontWeight:bold?700:400,color:color||"#333",fontSize:bold?13:12.5}}>{label}</td><td style={{padding:bold?"10px 12px":"6px 12px",textAlign:"right",fontWeight:bold?700:400,color:color||"#333"}}>{fmt(amount)}</td></tr>);
-  return(<div>{_useFirebase && loadYear && <HistoryLoadBar loadedYears={loadedYears||[]} loadYear={loadYear} label="전표"/>}<h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>손익계산서</h2><div style={{...S.card,maxWidth:580,overflow:"hidden"}}><div style={{background:"#1a237e",color:"#fff",padding:"10px 14px",fontWeight:700}}>손익계산서</div><table style={{width:"100%",borderCollapse:"collapse"}}><tbody><R label="I. 매출액" amount={data.tots.매출} bold bg="#f8f9fa"/>{data.secs.매출.map(it=><R key={it.code} label={it.name} amount={it.balance}/>)}<R label="매출총이익" amount={data.gp} bold color="#2e7d32" bg="#e8f5e9"/><R label="II. 판매비와관리비" amount={data.tots.판매비와관리비} bold bg="#f8f9fa"/>{data.secs.판매비와관리비.map(it=><R key={it.code} label={it.name} amount={it.balance}/>)}<R label="영업이익" amount={data.oi} bold color="#1565c0" bg="#e3f2fd"/></tbody><tfoot><tr style={{background:data.ni>=0?"#e8f5e9":"#fce4ec",borderTop:"3px solid #1a237e"}}><td style={{padding:"12px 14px",fontWeight:800,fontSize:15,color:data.ni>=0?"#2e7d32":"#c62828"}}>당기순이익</td><td style={{padding:"12px 14px",textAlign:"right",fontWeight:800,fontSize:15,color:data.ni>=0?"#2e7d32":"#c62828"}}>{fmtW(data.ni)}</td></tr></tfoot></table></div></div>);
+  return(<div>{_useFirebase && loadYear && <DataRangeBar loadedYears={loadedYears||[]} loadYear={loadYear}/>}<h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>손익계산서</h2><div style={{...S.card,maxWidth:580,overflow:"hidden"}}><div style={{background:"#1a237e",color:"#fff",padding:"10px 14px",fontWeight:700}}>손익계산서</div><table style={{width:"100%",borderCollapse:"collapse"}}><tbody><R label="I. 매출액" amount={data.tots.매출} bold bg="#f8f9fa"/>{data.secs.매출.map(it=><R key={it.code} label={it.name} amount={it.balance}/>)}<R label="매출총이익" amount={data.gp} bold color="#2e7d32" bg="#e8f5e9"/><R label="II. 판매비와관리비" amount={data.tots.판매비와관리비} bold bg="#f8f9fa"/>{data.secs.판매비와관리비.map(it=><R key={it.code} label={it.name} amount={it.balance}/>)}<R label="영업이익" amount={data.oi} bold color="#1565c0" bg="#e3f2fd"/></tbody><tfoot><tr style={{background:data.ni>=0?"#e8f5e9":"#fce4ec",borderTop:"3px solid #1a237e"}}><td style={{padding:"12px 14px",fontWeight:800,fontSize:15,color:data.ni>=0?"#2e7d32":"#c62828"}}>당기순이익</td><td style={{padding:"12px 14px",textAlign:"right",fontWeight:800,fontSize:15,color:data.ni>=0?"#2e7d32":"#c62828"}}>{fmtW(data.ni)}</td></tr></tfoot></table></div></div>);
 };
 
 const PARTNER_COLS = [
