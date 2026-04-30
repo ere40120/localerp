@@ -214,6 +214,29 @@ function usePersist(key, init) {
 
 // 연도별 청크 저장 훅 - 대용량 데이터(거래명세서/전표/세금계산서) 전용
 // 초기 로딩 시 최근 1달치(현재연도)만 불러오고, 나머지는 loadYear()로 필요 시 로드
+// 저장된 기본 범위 설정으로 로드해야 할 연도 목록 계산 (useChunkedPersist 내부에서 사용)
+function _getInitialYearsFromPref() {
+  try {
+    const pref = JSON.parse(localStorage.getItem('erp_datarange_pref')) || {};
+    const curYear = new Date().getFullYear();
+    const preset = pref.preset || '1month';
+    let fromYear = curYear;
+    switch(preset) {
+      case '1month':  { const d=new Date(); d.setMonth(d.getMonth()-1);  fromYear=d.getFullYear(); break; }
+      case '3months': { const d=new Date(); d.setMonth(d.getMonth()-3);  fromYear=d.getFullYear(); break; }
+      case '6months': { const d=new Date(); d.setMonth(d.getMonth()-6);  fromYear=d.getFullYear(); break; }
+      case 'thisyear':  fromYear=curYear; break;
+      case 'lastyear':  fromYear=curYear-1; break;
+      case 'all':       fromYear=2016; break;
+      case 'custom':    fromYear=parseInt((pref.customFrom||String(curYear)).slice(0,4)); break;
+      default:          fromYear=curYear;
+    }
+    const ys=[];
+    for(let y=Math.max(fromYear,2016);y<=curYear;y++) ys.push(y);
+    return ys.length ? ys : [curYear];
+  } catch { return [new Date().getFullYear()]; }
+}
+
 function useChunkedPersist(key, dateField, init) {
   const [val, setVal] = useState(init);
   const [loadedYears, setLoadedYears] = useState([]);
@@ -241,9 +264,9 @@ function useChunkedPersist(key, dateField, init) {
     if (!_useFirebase || !__uid) return;
     const uid = __uid;
     const curYear = new Date().getFullYear();
-    const curMonth = new Date().getMonth(); // 0-indexed
-    const yearsToLoad = [curYear];
-    if (curMonth === 0) yearsToLoad.push(curYear - 1); // 1월이면 전년도도 로드
+
+    // 저장된 기본 범위 설정 기준으로 초기 로드 연도 결정 (탭 진입 전에도 바로 적용)
+    const yearsToLoad = _getInitialYearsFromPref();
 
     // 구 형식(acc/{key}) → 신 형식(chunks/{key}/{year}) 마이그레이션 체크
     __db.ref('users/'+uid+'/acc/'+key).once('value', snap => {
@@ -342,16 +365,7 @@ function DataRangeBar({loadedYears, loadYear}) {
     (preset !== 'custom' || (pref.customFrom === customFrom && pref.customTo === customTo));
   const loaded = (loadedYears||[]).map(Number).sort((a,b)=>b-a);
 
-  // 첫 마운트 시 저장된 기본값으로 자동 로드
-  const didAutoLoad = useRef(false);
-  useEffect(() => {
-    if (didAutoLoad.current) return;
-    didAutoLoad.current = true;
-    const [from, to] = calcDateRange(pref.preset || '1month', pref.customFrom||'', pref.customTo||todayStr);
-    if (!from) return;
-    const needed = getNeededYears(from, to);
-    needed.filter(y => !(loadedYears||[]).includes(y) && !loaded.includes(y)).forEach(y => loadYear(y));
-  }, []);
+  // 초기 로드는 useChunkedPersist 훅에서 앱 시작 시 처리하므로 여기서는 불필요
 
   function calcDateRange(p, cfrom, cto) {
     const today = new Date();
