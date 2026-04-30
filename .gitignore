@@ -6,3 +6,10 @@
 거래명세서_2024년_데이터.xlsx
 .~lock.거래명세서_2024년_입력양식.xlsx\#
 거래명세서_2025년_입력양식.xlsx
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
