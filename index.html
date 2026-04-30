@@ -656,6 +656,7 @@ const ALL_MENUS = [
   {id:"journal",label:"분개장",icon:BookOpen},{id:"ledger",label:"총계정원장",icon:Layers},
   {id:"trial",label:"시산표",icon:Calculator},{id:"bs",label:"재무상태표",icon:FileText},
   {id:"is",label:"손익계산서",icon:BarChart3},{id:"partners",label:"거래처관리",icon:Users},
+  {id:"receivables",label:"미수금 관리",icon:DollarSign},
   {id:"accounts",label:"계정과목관리",icon:Settings},{id:"products",label:"품목/단가관리",icon:Package},
   {id:"partnerPrice",label:"거래처별 단가",icon:Tag},{id:"costCalc",label:"원가계산",icon:Layers},
   {id:"bizSettings",label:"회사정보 설정",icon:Building2},{id:"backup",label:"백업/복원",icon:HardDrive},
@@ -2706,6 +2707,306 @@ const BackupRestore = ({partners,vouchers,statements,taxInvoices,products,partne
   );
 };
 
+// ===================== 미수금 관리 =====================
+const ReceivablesPage = ({statements, partners, receivables, setReceivables}) => {
+  const todayStr = new Date().toISOString().slice(0,10);
+  const emptyForm = {date:todayStr, partnerId:"", amount:"", memo:""};
+  const [form, setForm] = useState(emptyForm);
+  const [editId, setEditId] = useState(null);
+  const [filterPartner, setFilterPartner] = useState("all");
+  const [tab, setTab] = useState("summary");
+  const [confirmDel, setConfirmDel] = useState(null);
+
+  const fmt = n => Math.round(n||0).toLocaleString();
+
+  // 거래처별 청구합계 (거래명세서 grandTotal 기준)
+  const billingByPartner = useMemo(() => {
+    const map = {};
+    statements.forEach(s => {
+      if (!map[s.partnerId]) map[s.partnerId] = 0;
+      map[s.partnerId] += (s.grandTotal||0);
+    });
+    return map;
+  }, [statements]);
+
+  // 거래처별 입금합계
+  const paymentByPartner = useMemo(() => {
+    const map = {};
+    receivables.forEach(r => {
+      if (!map[r.partnerId]) map[r.partnerId] = 0;
+      map[r.partnerId] += (r.amount||0);
+    });
+    return map;
+  }, [receivables]);
+
+  // 요약 행 (청구 또는 입금이 있는 거래처)
+  const summaryRows = useMemo(() => {
+    const ids = new Set([...Object.keys(billingByPartner), ...Object.keys(paymentByPartner)]);
+    return Array.from(ids).map(id => {
+      const p = partners.find(x => x.id === id);
+      const billing = billingByPartner[id]||0;
+      const payment = paymentByPartner[id]||0;
+      return {id, name:p?.name||id, billing, payment, outstanding:billing-payment};
+    }).sort((a,b) => b.outstanding - a.outstanding);
+  }, [billingByPartner, paymentByPartner, partners]);
+
+  const totalBilling = summaryRows.reduce((s,r)=>s+r.billing,0);
+  const totalPayment = summaryRows.reduce((s,r)=>s+r.payment,0);
+  const totalOutstanding = summaryRows.reduce((s,r)=>s+r.outstanding,0);
+
+  const handleSave = () => {
+    if (!form.partnerId || !form.amount || !form.date) return;
+    const amount = parseFloat(String(form.amount).replace(/,/g,''));
+    if (isNaN(amount) || amount <= 0) return;
+    if (editId) {
+      setReceivables(prev => prev.map(r => r.id===editId ? {...r,...form,amount} : r));
+      setEditId(null);
+    } else {
+      setReceivables(prev => [...prev, {id:"REC"+Date.now(), ...form, amount}]);
+    }
+    setForm(emptyForm);
+  };
+
+  const handleEdit = r => {
+    setForm({date:r.date, partnerId:r.partnerId, amount:r.amount, memo:r.memo||""});
+    setEditId(r.id);
+    setTab("input");
+    window.scrollTo(0,0);
+  };
+
+  const handleDelete = id => {
+    setReceivables(prev => prev.filter(r => r.id!==id));
+    setConfirmDel(null);
+  };
+
+  const filteredHistory = useMemo(() => {
+    let list = [...receivables].sort((a,b)=>b.date.localeCompare(a.date));
+    if (filterPartner!=="all") list = list.filter(r=>r.partnerId===filterPartner);
+    return list;
+  }, [receivables, filterPartner]);
+
+  const tabBtn = t => ({
+    padding:"9px 18px", cursor:"pointer", fontWeight:tab===t?700:400,
+    borderBottom:tab===t?"2px solid #1a237e":"2px solid transparent",
+    color:tab===t?"#1a237e":"#666", background:"none", border:"none",
+    borderBottom:tab===t?"2px solid #1a237e":"2px solid transparent", fontSize:14
+  });
+
+  return (
+    <div style={{maxWidth:900,margin:"0 auto"}}>
+      <h2 style={{fontSize:22,fontWeight:700,color:"#1a1a2e",marginBottom:18}}>미수금 관리</h2>
+
+      {/* 요약 카드 */}
+      <div style={{display:"flex",gap:14,marginBottom:20,flexWrap:"wrap"}}>
+        {[
+          {label:"총 청구액",value:totalBilling,color:"#1565c0",bg:"#e3f2fd"},
+          {label:"총 입금액",value:totalPayment,color:"#2e7d32",bg:"#e8f5e9"},
+          {label:"총 미수금",value:totalOutstanding,color:totalOutstanding>0?"#c62828":"#2e7d32",bg:totalOutstanding>0?"#ffebee":"#e8f5e9"},
+        ].map(c=>(
+          <div key={c.label} style={{flex:"1 1 180px",background:"#fff",borderRadius:12,padding:"16px 20px",boxShadow:"0 1px 6px rgba(0,0,0,0.08)",borderLeft:"4px solid "+c.color}}>
+            <div style={{fontSize:12,color:"#888",marginBottom:6}}>{c.label}</div>
+            <div style={{fontSize:20,fontWeight:800,color:c.color}}>₩{fmt(c.value)}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* 탭 영역 */}
+      <div style={{background:"#fff",borderRadius:12,boxShadow:"0 1px 6px rgba(0,0,0,0.08)",overflow:"hidden"}}>
+        <div style={{display:"flex",borderBottom:"1px solid #eee",paddingLeft:8}}>
+          <button style={tabBtn("summary")} onClick={()=>setTab("summary")}>거래처별 현황</button>
+          <button style={tabBtn("input")} onClick={()=>{setTab("input");}}>입금 등록</button>
+          <button style={tabBtn("history")} onClick={()=>setTab("history")}>입금 내역</button>
+        </div>
+
+        <div style={{padding:"20px 20px"}}>
+          {/* ── 탭1: 거래처별 현황 ── */}
+          {tab==="summary" && (
+            <div>
+              {summaryRows.length===0 ? (
+                <div style={{textAlign:"center",padding:"40px 0",color:"#bbb"}}>
+                  <div style={{fontSize:40,marginBottom:8}}>📋</div>
+                  <div>거래명세서 또는 입금 내역이 없습니다.</div>
+                  <div style={{fontSize:12,marginTop:4}}>거래명세서를 등록하거나 입금을 기록해주세요.</div>
+                </div>
+              ) : (
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                  <thead>
+                    <tr style={{background:"#f5f7ff"}}>
+                      {["거래처명","청구합계","입금합계","미수금","입금률"].map((h,i)=>(
+                        <th key={h} style={{padding:"11px 14px",textAlign:i===0?"left":"right",borderBottom:"2px solid #e0e7ff",fontWeight:600,color:"#333",fontSize:12}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summaryRows.map(r=>{
+                      const rate = r.billing>0 ? Math.round(r.payment/r.billing*100) : (r.payment>0?999:0);
+                      const rateDisp = rate>=999?"초과":rate+"%";
+                      const rateColor = rate>=100?"#2e7d32":rate>=50?"#e65100":"#c62828";
+                      const rateBg = rate>=100?"#e8f5e9":rate>=50?"#fff3e0":"#ffebee";
+                      return (
+                        <tr key={r.id} style={{borderBottom:"1px solid #f0f0f0"}} onMouseEnter={e=>e.currentTarget.style.background="#fafbff"} onMouseLeave={e=>e.currentTarget.style.background=""}>
+                          <td style={{padding:"11px 14px",fontWeight:500}}>{r.name}</td>
+                          <td style={{padding:"11px 14px",textAlign:"right",color:"#1565c0"}}>₩{fmt(r.billing)}</td>
+                          <td style={{padding:"11px 14px",textAlign:"right",color:"#2e7d32"}}>₩{fmt(r.payment)}</td>
+                          <td style={{padding:"11px 14px",textAlign:"right",fontWeight:700,color:r.outstanding>0?"#c62828":r.outstanding<0?"#6a1b9a":"#2e7d32"}}>
+                            {r.outstanding!==0?"₩"+fmt(Math.abs(r.outstanding))+(r.outstanding<0?" (초과)":""):"₩0"}
+                          </td>
+                          <td style={{padding:"11px 14px",textAlign:"right"}}>
+                            <span style={{background:rateBg,color:rateColor,padding:"2px 9px",borderRadius:12,fontSize:12,fontWeight:600}}>{rateDisp}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{background:"#f5f7ff",fontWeight:700,fontSize:13}}>
+                      <td style={{padding:"11px 14px"}}>합계</td>
+                      <td style={{padding:"11px 14px",textAlign:"right",color:"#1565c0"}}>₩{fmt(totalBilling)}</td>
+                      <td style={{padding:"11px 14px",textAlign:"right",color:"#2e7d32"}}>₩{fmt(totalPayment)}</td>
+                      <td style={{padding:"11px 14px",textAlign:"right",color:totalOutstanding>0?"#c62828":"#2e7d32"}}>₩{fmt(totalOutstanding)}</td>
+                      <td style={{padding:"11px 14px",textAlign:"right"}}>{totalBilling>0?Math.round(totalPayment/totalBilling*100):0}%</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+              <p style={{fontSize:11,color:"#bbb",marginTop:10,marginBottom:0}}>* 청구합계는 등록된 거래명세서 금액(부가세 포함) 기준입니다.</p>
+            </div>
+          )}
+
+          {/* ── 탭2: 입금 등록 ── */}
+          {tab==="input" && (
+            <div style={{maxWidth:460}}>
+              <h3 style={{fontSize:16,fontWeight:700,marginBottom:18,color:"#333"}}>{editId?"입금 내역 수정":"입금 등록"}</h3>
+              <div style={{display:"grid",gap:16}}>
+                <div>
+                  <label style={{fontSize:12,color:"#555",marginBottom:5,display:"block",fontWeight:600}}>입금일 *</label>
+                  <input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}
+                    style={{width:"100%",padding:"9px 11px",border:"1px solid #ddd",borderRadius:7,fontSize:13,boxSizing:"border-box"}}/>
+                </div>
+                <div>
+                  <label style={{fontSize:12,color:"#555",marginBottom:5,display:"block",fontWeight:600}}>거래처 *</label>
+                  <select value={form.partnerId} onChange={e=>setForm(f=>({...f,partnerId:e.target.value}))}
+                    style={{width:"100%",padding:"9px 11px",border:"1px solid #ddd",borderRadius:7,fontSize:13,boxSizing:"border-box",background:"#fff"}}>
+                    <option value="">-- 거래처 선택 --</option>
+                    {partners.filter(p=>p.type==="매출처"||!p.type).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                    {partners.filter(p=>p.type&&p.type!=="매출처").length>0 && <>
+                      <option disabled>── 매입처 ──</option>
+                      {partners.filter(p=>p.type&&p.type!=="매출처").map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                    </>}
+                  </select>
+                </div>
+                <div>
+                  <label style={{fontSize:12,color:"#555",marginBottom:5,display:"block",fontWeight:600}}>입금 금액 *</label>
+                  <input type="number" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))}
+                    placeholder="0" min="0"
+                    style={{width:"100%",padding:"9px 11px",border:"1px solid #ddd",borderRadius:7,fontSize:13,boxSizing:"border-box"}}/>
+                  {form.amount && <div style={{fontSize:11,color:"#888",marginTop:3}}>₩{fmt(parseFloat(String(form.amount).replace(/,/g,''))||0)}</div>}
+                </div>
+                <div>
+                  <label style={{fontSize:12,color:"#555",marginBottom:5,display:"block",fontWeight:600}}>메모</label>
+                  <input type="text" value={form.memo} onChange={e=>setForm(f=>({...f,memo:e.target.value}))}
+                    placeholder="예: 3월분 대금 입금"
+                    style={{width:"100%",padding:"9px 11px",border:"1px solid #ddd",borderRadius:7,fontSize:13,boxSizing:"border-box"}}/>
+                </div>
+                {form.partnerId && billingByPartner[form.partnerId] !== undefined && (
+                  <div style={{background:"#f5f7ff",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#555"}}>
+                    <span style={{fontWeight:600}}>{partners.find(p=>p.id===form.partnerId)?.name}</span> 현황:&nbsp;
+                    청구 <b style={{color:"#1565c0"}}>₩{fmt(billingByPartner[form.partnerId]||0)}</b> /
+                    입금 <b style={{color:"#2e7d32"}}>₩{fmt(paymentByPartner[form.partnerId]||0)}</b> /
+                    미수금 <b style={{color:"#c62828"}}>₩{fmt((billingByPartner[form.partnerId]||0)-(paymentByPartner[form.partnerId]||0))}</b>
+                  </div>
+                )}
+                <div style={{display:"flex",gap:8,paddingTop:4}}>
+                  <button onClick={handleSave}
+                    disabled={!form.partnerId||!form.amount||!form.date}
+                    style={{background:(!form.partnerId||!form.amount||!form.date)?"#ccc":"#1a237e",color:"#fff",border:"none",borderRadius:7,padding:"11px 28px",fontWeight:700,cursor:(!form.partnerId||!form.amount||!form.date)?"default":"pointer",fontSize:14}}>
+                    {editId?"수정 저장":"입금 등록"}
+                  </button>
+                  {editId && (
+                    <button onClick={()=>{setEditId(null);setForm(emptyForm);}}
+                      style={{background:"#eee",color:"#333",border:"none",borderRadius:7,padding:"11px 18px",cursor:"pointer",fontSize:13}}>취소</button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── 탭3: 입금 내역 ── */}
+          {tab==="history" && (
+            <div>
+              <div style={{display:"flex",gap:10,marginBottom:16,alignItems:"center",flexWrap:"wrap"}}>
+                <label style={{fontSize:12,color:"#555",fontWeight:600}}>거래처 필터</label>
+                <select value={filterPartner} onChange={e=>setFilterPartner(e.target.value)}
+                  style={{padding:"7px 11px",border:"1px solid #ddd",borderRadius:7,fontSize:12,background:"#fff"}}>
+                  <option value="all">전체</option>
+                  {partners.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <span style={{fontSize:12,color:"#aaa",marginLeft:"auto"}}>{filteredHistory.length}건</span>
+              </div>
+              {filteredHistory.length===0 ? (
+                <div style={{textAlign:"center",padding:"40px 0",color:"#bbb"}}>
+                  <div style={{fontSize:36,marginBottom:8}}>💳</div>
+                  <div>입금 내역이 없습니다.</div>
+                </div>
+              ) : (
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                  <thead>
+                    <tr style={{background:"#f5f7ff"}}>
+                      {["입금일","거래처","입금금액","메모",""].map((h,i)=>(
+                        <th key={i} style={{padding:"10px 12px",textAlign:i===2?"right":"left",borderBottom:"2px solid #e0e7ff",fontWeight:600,color:"#333",fontSize:12}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredHistory.map(r=>{
+                      const p = partners.find(x=>x.id===r.partnerId);
+                      return (
+                        <tr key={r.id} style={{borderBottom:"1px solid #f0f0f0"}} onMouseEnter={e=>e.currentTarget.style.background="#fafbff"} onMouseLeave={e=>e.currentTarget.style.background=""}>
+                          <td style={{padding:"10px 12px",color:"#555"}}>{r.date}</td>
+                          <td style={{padding:"10px 12px",fontWeight:500}}>{p?.name||r.partnerId}</td>
+                          <td style={{padding:"10px 12px",textAlign:"right",fontWeight:700,color:"#2e7d32"}}>₩{fmt(r.amount)}</td>
+                          <td style={{padding:"10px 12px",color:"#888",fontSize:12}}>{r.memo||"-"}</td>
+                          <td style={{padding:"10px 12px"}}>
+                            <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>
+                              <button onClick={()=>handleEdit(r)} style={{background:"none",border:"1px solid #ddd",borderRadius:5,padding:"4px 10px",cursor:"pointer",fontSize:11,color:"#444"}}>수정</button>
+                              <button onClick={()=>setConfirmDel(r.id)} style={{background:"none",border:"1px solid #ffcdd2",borderRadius:5,padding:"4px 10px",cursor:"pointer",fontSize:11,color:"#c62828"}}>삭제</button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{background:"#f5f7ff",fontWeight:700}}>
+                      <td colSpan={2} style={{padding:"10px 12px",fontSize:12}}>합계 ({filteredHistory.length}건)</td>
+                      <td style={{padding:"10px 12px",textAlign:"right",color:"#2e7d32"}}>₩{fmt(filteredHistory.reduce((s,r)=>s+(r.amount||0),0))}</td>
+                      <td colSpan={2}/>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 삭제 확인 모달 */}
+      {confirmDel && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000}}>
+          <div style={{background:"#fff",borderRadius:14,padding:"28px 28px 20px",maxWidth:320,width:"90%",boxShadow:"0 8px 32px rgba(0,0,0,0.18)"}}>
+            <div style={{fontWeight:700,fontSize:15,marginBottom:10}}>입금 내역 삭제</div>
+            <p style={{color:"#555",fontSize:13,margin:"0 0 20px"}}>이 입금 내역을 삭제하면 복구할 수 없습니다. 계속할까요?</p>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button onClick={()=>setConfirmDel(null)} style={{padding:"9px 18px",border:"1px solid #ddd",borderRadius:7,cursor:"pointer",background:"#fff",fontSize:13}}>취소</button>
+              <button onClick={()=>handleDelete(confirmDel)} style={{padding:"9px 18px",border:"none",borderRadius:7,cursor:"pointer",background:"#c62828",color:"#fff",fontWeight:700,fontSize:13}}>삭제</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AccountsMgmt = ({accounts}) => {
   const [exp,setExp]=useState(["자산","부채","자본","수익","비용"]);const grouped={};accounts.forEach(a=>{if(!grouped[a.category])grouped[a.category]={};if(!grouped[a.category][a.subcategory])grouped[a.category][a.subcategory]=[];grouped[a.category][a.subcategory].push(a);});const colors={자산:"#1565c0",부채:"#c62828",자본:"#2e7d32",수익:"#6a1b9a",비용:"#e65100"};
   return(<div><h2 style={{fontSize:20,fontWeight:700,color:"#1a1a2e",marginBottom:16}}>계정과목관리</h2>{Object.keys(grouped).map(cat=><div key={cat} style={{...S.card,marginBottom:8,overflow:"hidden"}}><div onClick={()=>setExp(p=>p.includes(cat)?p.filter(c=>c!==cat):[...p,cat])} style={{padding:"10px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:7,background:colors[cat]+"10"}}>{exp.includes(cat)?<ChevronDown size={15}/>:<ChevronRight size={15}/>}<span style={{fontWeight:700,color:colors[cat]}}>{cat}</span><span style={{fontSize:12,color:"#888"}}>({Object.values(grouped[cat]).flat().length})</span></div>{exp.includes(cat)&&<div style={{padding:"4px 0"}}>{Object.keys(grouped[cat]).map(sub=><div key={sub}><div style={{padding:"5px 22px",fontSize:12,fontWeight:600,color:"#666",background:"#fafafa"}}>{sub}</div>{grouped[cat][sub].map(a=><div key={a.code} style={{padding:"4px 22px 4px 36px",fontSize:12.5,display:"flex",justifyContent:"space-between",borderBottom:"1px solid #f8f8f8"}}><span><span style={{color:"#999",marginRight:8}}>{a.code}</span>{a.name}</span><span style={{fontSize:11,color:"#aaa"}}>{a.type==="debit"?"차변":"대변"}</span></div>)}</div>)}</div>}</div>)}</div>);
@@ -3612,7 +3913,6 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
         </div>
         {catMgmtView==="category" && (
           <div>
-            {/* 카테고리 추가 폼 */}
             <div style={{...S.card,padding:12,background:"#f0f4ff",marginBottom:12}}>
               <div style={{fontWeight:700,fontSize:13,color:"#1a237e",marginBottom:8}}>+ 카테고리 추가</div>
               <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
@@ -3627,7 +3927,6 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
                 }}>추가</button>
               </div>
             </div>
-            {/* 카테고리 트리 */}
             {categories.length===0&&<div style={{...S.card,padding:20,textAlign:"center",color:"#aaa"}}>카테고리가 없습니다. 위에서 추가하세요.</div>}
             {[...new Set(categories.map(c=>c.cat1))].filter(Boolean).map(c1=>{
               const c1open=catMgmtOpen[c1];
@@ -3675,7 +3974,6 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
         )}
         {catMgmtView==="company" && (
           <div>
-            {/* 회사 추가 폼 */}
             <div style={{...S.card,padding:12,background:"#f0f4ff",marginBottom:12}}>
               <div style={{fontWeight:700,fontSize:13,color:"#1a237e",marginBottom:8}}>+ 회사 추가</div>
               <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
@@ -3689,7 +3987,6 @@ function CostCalcPage({materials, setMaterials, costProducts, setCostProducts,
                 }}>추가</button>
               </div>
             </div>
-            {/* 회사 목록 */}
             {companies.length===0&&<div style={{...S.card,padding:20,textAlign:"center",color:"#aaa"}}>등록된 회사가 없습니다. 위에서 추가하세요.</div>}
             {companies.map(co=>(
               <div key={co.id} style={{...S.card,marginBottom:6,padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
@@ -3754,6 +4051,7 @@ function App({user, localMode}) {
   const [taxInvoices,setTaxInvoices,loadTaxYear,taxLoadedYears]=useChunkedPersist("taxInvoices","issueDate",INIT_TAXINVOICES);
   const [autoBackup,setAutoBackup]=usePersist("autoBackup",true);
   const [lastAutoBackup,setLastAutoBackup]=usePersist("lastAutoBackup","");
+  const [receivables,setReceivables]=usePersist("receivables",[]);
   const [materials,setMaterials]=usePersist("materials",INIT_MATERIALS);
   const [costProducts,setCostProducts]=usePersist("costProducts",INIT_COST_PRODUCTS);
   const [processingCosts,setProcessingCosts]=usePersist("processingCosts",INIT_PROCESSING_COSTS);
@@ -3804,6 +4102,7 @@ function App({user, localMode}) {
     case "bs": return <BalanceSheet vouchers={vouchers} accounts={accounts} loadYear={loadVouchYear} loadedYears={vouchLoadedYears}/>;
     case "is": return <IncomeStatement vouchers={vouchers} accounts={accounts} loadYear={loadVouchYear} loadedYears={vouchLoadedYears}/>;
     case "partners": return <Partners partners={partners} setPartners={setPartners}/>;
+    case "receivables": return <ReceivablesPage statements={statements} partners={partners} receivables={receivables} setReceivables={setReceivables}/>;
     case "accounts": return <AccountsMgmt accounts={accounts}/>;
     case "products": return <ProductMgmt products={products} setProducts={setProducts}/>;
     case "partnerPrice": return <PartnerPricePage partners={partners} products={products} partnerPrices={partnerPrices} setPartnerPrices={setPartnerPrices}/>;
