@@ -310,6 +310,14 @@ function useChunkedPersist(key, dateField, init) {
 }
 
 // 데이터 로드 범위 선택 배너 — 기간 프리셋 또는 직접 지정으로 필요한 연도 청크를 자동 로드
+const DATA_RANGE_PREF_KEY = 'erp_datarange_pref';
+function loadDataRangePref() {
+  try { return JSON.parse(localStorage.getItem(DATA_RANGE_PREF_KEY)) || {}; } catch { return {}; }
+}
+function saveDataRangePref(obj) {
+  try { localStorage.setItem(DATA_RANGE_PREF_KEY, JSON.stringify(obj)); } catch {}
+}
+
 function DataRangeBar({loadedYears, loadYear}) {
   const curYear = new Date().getFullYear();
   const todayStr = new Date().toISOString().slice(0,10);
@@ -322,13 +330,30 @@ function DataRangeBar({loadedYears, loadYear}) {
     {v:'all',     l:'전체'},
     {v:'custom',  l:'직접 지정'},
   ];
-  const [preset, setPreset] = useState('1month');
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState(todayStr);
+
+  // 저장된 기본 설정 읽기
+  const pref = loadDataRangePref();
+  const [preset, setPreset] = useState(pref.preset || '1month');
+  const [customFrom, setCustomFrom] = useState(pref.customFrom || '');
+  const [customTo, setCustomTo] = useState(pref.customTo || todayStr);
   const [loading, setLoading] = useState(false);
+  const [savedMsg, setSavedMsg] = useState('');
+  const isDefault = (pref.preset||'1month') === preset &&
+    (preset !== 'custom' || (pref.customFrom === customFrom && pref.customTo === customTo));
   const loaded = (loadedYears||[]).map(Number).sort((a,b)=>b-a);
 
-  function calcDateRange(p) {
+  // 첫 마운트 시 저장된 기본값으로 자동 로드
+  const didAutoLoad = useRef(false);
+  useEffect(() => {
+    if (didAutoLoad.current) return;
+    didAutoLoad.current = true;
+    const [from, to] = calcDateRange(pref.preset || '1month', pref.customFrom||'', pref.customTo||todayStr);
+    if (!from) return;
+    const needed = getNeededYears(from, to);
+    needed.filter(y => !(loadedYears||[]).includes(y) && !loaded.includes(y)).forEach(y => loadYear(y));
+  }, []);
+
+  function calcDateRange(p, cfrom, cto) {
     const today = new Date();
     const pad = n => String(n).padStart(2,'0');
     const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -339,7 +364,7 @@ function DataRangeBar({loadedYears, loadYear}) {
       case 'thisyear':  return [`${curYear}-01-01`, todayStr];
       case 'lastyear':  return [`${curYear-1}-01-01`, todayStr];
       case 'all':       return ['2016-01-01', todayStr];
-      case 'custom':    return [customFrom||'2016-01-01', customTo||todayStr];
+      case 'custom':    return [cfrom||'2016-01-01', cto||todayStr];
       default:          return [null, null];
     }
   }
@@ -353,7 +378,7 @@ function DataRangeBar({loadedYears, loadYear}) {
   }
 
   function handleApply() {
-    const [from, to] = calcDateRange(preset);
+    const [from, to] = calcDateRange(preset, customFrom, customTo);
     if (!from) return;
     const needed = getNeededYears(from, to);
     const toLoad = needed.filter(y => !loaded.includes(y));
@@ -363,9 +388,16 @@ function DataRangeBar({loadedYears, loadYear}) {
     setTimeout(() => setLoading(false), 1800);
   }
 
-  const [from, to] = calcDateRange(preset);
+  function handleSaveDefault() {
+    saveDataRangePref({preset, customFrom: preset==='custom'?customFrom:'', customTo: preset==='custom'?customTo:''});
+    setSavedMsg('기본값 저장됨');
+    setTimeout(() => setSavedMsg(''), 2000);
+  }
+
+  const [from, to] = calcDateRange(preset, customFrom, customTo);
   const needed = from ? getNeededYears(from, to) : [];
   const alreadyLoaded = needed.every(y => loaded.includes(y));
+  const S2 = {padding:"4px 8px",border:"1px solid #c5cae9",borderRadius:6,fontSize:12,background:"#fff",cursor:"pointer"};
 
   return (
     <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",background:"#f0f4ff",border:"1px solid #c5cae9",borderRadius:8,marginBottom:12,flexWrap:"wrap",fontSize:12.5}}>
@@ -373,21 +405,23 @@ function DataRangeBar({loadedYears, loadYear}) {
       <span style={{color:"#3949ab",fontWeight:600,whiteSpace:"nowrap"}}>로드된 데이터:</span>
       <span style={{color:"#555"}}>{loaded.length ? loaded.map(y=>y+'년').join(', ') : '—'}</span>
       <span style={{color:"#ccc",margin:"0 2px"}}>|</span>
-      <span style={{color:"#666",whiteSpace:"nowrap"}}>추가 로드:</span>
-      <select value={preset} onChange={e=>{setPreset(e.target.value);}} style={{padding:"4px 8px",border:"1px solid #c5cae9",borderRadius:6,fontSize:12,background:"#fff",cursor:"pointer"}}>
-        {PRESETS.map(p=><option key={p.v} value={p.v}>{p.l}</option>)}
+      <span style={{color:"#666",whiteSpace:"nowrap"}}>범위:</span>
+      <select value={preset} onChange={e=>setPreset(e.target.value)} style={S2}>
+        {PRESETS.map(p=><option key={p.v} value={p.v}>{p.l}{(pref.preset||'1month')===p.v?' ★':''}</option>)}
       </select>
       {preset==='custom' && <>
-        <input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)} style={{padding:"4px 7px",border:"1px solid #c5cae9",borderRadius:6,fontSize:12}}/>
+        <input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)} style={S2}/>
         <span style={{color:"#888"}}>~</span>
-        <input type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)} style={{padding:"4px 7px",border:"1px solid #c5cae9",borderRadius:6,fontSize:12}}/>
+        <input type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)} style={S2}/>
       </>}
-      <button onClick={handleApply} disabled={loading||alreadyLoaded} style={{padding:"4px 12px",background:(loading||alreadyLoaded)?"#e0e0e0":"#3949ab",color:(loading||alreadyLoaded)?"#999":"#fff",border:"none",borderRadius:6,cursor:(loading||alreadyLoaded)?"default":"pointer",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}>
-        {loading
-          ? <><RotateCcw size={11} style={{animation:"spin 1s linear infinite"}}/> 로딩 중...</>
-          : alreadyLoaded
-            ? <><CheckCircle size={11}/> 완료</>
-            : <><Download size={11}/> 불러오기</>}
+      <button onClick={handleApply} disabled={loading||alreadyLoaded}
+        style={{padding:"4px 12px",background:(loading||alreadyLoaded)?"#e0e0e0":"#3949ab",color:(loading||alreadyLoaded)?"#999":"#fff",border:"none",borderRadius:6,cursor:(loading||alreadyLoaded)?"default":"pointer",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}>
+        {loading ? <><RotateCcw size={11} style={{animation:"spin 1s linear infinite"}}/> 로딩 중...</>
+          : alreadyLoaded ? <><CheckCircle size={11}/> 완료</> : <><Download size={11}/> 불러오기</>}
+      </button>
+      <button onClick={handleSaveDefault} title="현재 범위를 기본값으로 저장 (다음 접속 시 자동 적용)"
+        style={{padding:"4px 10px",background:isDefault?"#e8f5e9":"#fff",color:isDefault?"#2e7d32":"#5c6bc0",border:`1px solid ${isDefault?"#a5d6a7":"#c5cae9"}`,borderRadius:6,cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}>
+        {savedMsg ? <><CheckCircle size={11}/> {savedMsg}</> : <><Save size={11}/> {isDefault?'기본값 적용 중':'기본값으로 저장'}</>}
       </button>
     </div>
   );
