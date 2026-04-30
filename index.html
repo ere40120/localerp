@@ -2040,8 +2040,15 @@ const Partners = ({partners,setPartners}) => {
 
   const submit=()=>{
     if(!form.name){alert("거래처명을 입력하세요.");return;}
-    if(editId){setPartners(p=>p.map(x=>x.id===editId?{...form}:x));setEditId(null);}
-    else{setPartners(p=>[...p,{...form,id:"P"+String(Math.max(0,...p.map(x=>parseInt(x.id.replace("P",""))||0))+1).padStart(3,"0")}]);}
+    if(editId){
+      const dup=partners.find(x=>x.id!==editId&&x.name===form.name);
+      if(dup){alert(`"${form.name}" 거래처가 이미 등록되어 있습니다.`);return;}
+      setPartners(p=>p.map(x=>x.id===editId?{...form}:x));setEditId(null);
+    }else{
+      const dup=partners.find(x=>x.name===form.name);
+      if(dup){alert(`"${form.name}" 거래처가 이미 등록되어 있습니다.`);return;}
+      setPartners(p=>[...p,{...form,id:"P"+String(Math.max(0,...p.map(x=>parseInt(x.id.replace("P",""))||0))+1).padStart(3,"0")}]);
+    }
     setForm(empty);
   };
 
@@ -2112,7 +2119,7 @@ const Partners = ({partners,setPartners}) => {
       setPartners(prev=>{
         let cur=[...prev];
         importData.forEach(obj=>{
-          const dup=cur.find(x=>obj.bizNo&&x.bizNo===obj.bizNo);
+          const dup=cur.find(x=>(obj.bizNo&&x.bizNo===obj.bizNo)||x.name===obj.name);
           if(dup){cur=cur.map(x=>x.id===dup.id?{...dup,...obj,id:dup.id}:x);}
           else{cur=[...cur,{...obj,id:nextId(cur)}];}
         });
